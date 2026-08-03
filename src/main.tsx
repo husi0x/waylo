@@ -2,9 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
-  Apple,
   BarChart3,
-  Bot,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -31,6 +29,8 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faAndroid, faApple } from "@fortawesome/free-brands-svg-icons";
 import {
   CartesianGrid,
   Legend,
@@ -41,6 +41,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { EXIT_PAGE_DEFAULTS, isValidCountdownInput, normalizeCountdown, withExitPageDefaults } from "../exit-page-config.mjs";
+import { ExitPagePreview } from "./ExitPagePreview";
 import "./styles.css";
 type RouteRule = {
   id: string;
@@ -60,7 +62,7 @@ type Link = {
   rules: number;
   routes?: RouteRule[];
   landing?: boolean;
-  landingMode?: string;
+  landingMode?: "browser" | "app";
   landingScheme?: string;
   landingHeading?: string;
   landingSubtext?: string;
@@ -148,27 +150,28 @@ type AnalyticsData = {
   };
 };
 type AnalyticsPeriod = "day" | "week" | "month";
-type AnalyticsView = "overview" | "geo" | "devices" | "links";
+type AnalyticsView = "overview" | "geo" | "devices" | "links" | "visits";
 
-const flagFor = (code: string) => {
-  const c = String(code || "").toUpperCase();
-  if (!/^[A-Z]{2}$/.test(c)) return "🌐";
-  return String.fromCodePoint(...[...c].map((x) => 127397 + x.charCodeAt(0)));
-};
-const countryName = (code: string) => {
-  if (!/^[A-Z]{2}$/i.test(code)) return code || "Unknown";
-  try {
-    return new Intl.DisplayNames([navigator.language || "en"], {
-      type: "region",
-    }).of(code.toUpperCase()) || code;
-  } catch {
-    return code;
-  }
-};
+function CountryFlag({ code, size = 22 }: { code: string; size?: number }) {
+  const country = String(code || "").toLowerCase();
+  if (!/^[a-z]{2}$/.test(country) || country === "xx")
+    return <Globe2 size={size} aria-label="Unknown country" />;
+  return (
+    <img
+      className="countryflag"
+      src={`/flags/${country}.svg`}
+      alt={country.toUpperCase()}
+      loading="lazy"
+      style={{ width: size, height: Math.round(size * 0.75) }}
+      title={country.toUpperCase()}
+    />
+  );
+}
 function DeviceIcon({ device, os, size = 18 }: any) {
-  if (os === "Android") return <Bot size={size} aria-label="Android" />;
+  if (os === "Android")
+    return <FontAwesomeIcon icon={faAndroid} aria-label="Android" style={{ fontSize: size }} />;
   if (os === "iOS" || os === "macOS")
-    return <Apple size={size} aria-label={os} />;
+    return <FontAwesomeIcon icon={faApple} aria-label={os} style={{ fontSize: size }} />;
   if (device === "Mobile") return <Smartphone size={size} />;
   if (device === "Tablet") return <Tablet size={size} />;
   return <Monitor size={size} />;
@@ -191,7 +194,7 @@ function App() {
           return r.json();
         })
         .then(setData),
-      fetch("/api/analytics?days=30&limit=200")
+      fetch("/api/analytics?period=month&limit=100")
         .then((r) => r.json())
         .then(setAnalytics),
     ]);
@@ -474,7 +477,7 @@ function CardTitle({ title, sub, action }: any) {
         <h3>{title}</h3>
         <p>{sub}</p>
       </span>
-      <button>{action}</button>
+      <span className="cardaction">{action}</span>
     </div>
   );
 }
@@ -1146,22 +1149,26 @@ function Analytics({
   const pages = stats?.pagination?.pages || 1;
   const periodLabel =
     period === "day"
-      ? "Last 30 days"
+      ? "Last 24 hours"
       : period === "week"
-        ? "Last 12 weeks"
-        : "Last 12 months";
+        ? "Last 7 days"
+        : "Last month";
   const formatBucket = (value: string) => {
-    if (period === "week") return `W${value.split("W")[1] || value}`;
     const date = new Date(
-      period === "month" ? `${value}-01T00:00:00Z` : `${value}T00:00:00Z`,
+      period === "day"
+        ? `${value.replace(" ", "T")}:00Z`
+        : `${value}T00:00:00Z`,
     );
     return Number.isNaN(date.getTime())
       ? value
-      : date.toLocaleDateString(undefined, {
-          month: "short",
-          ...(period === "day" ? { day: "numeric" } : {}),
-          timeZone: "UTC",
-        });
+      : period === "day"
+        ? date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+        : date.toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+            ...(period === "week" ? { weekday: "short" } : {}),
+            timeZone: "UTC",
+          });
   };
   const metricRow = (
     key: string,
@@ -1188,8 +1195,8 @@ function Analytics({
   const countryRows = (stats?.countries || []).map((item) =>
     metricRow(
       item.country,
-      <span className="flag">{flagFor(item.country)}</span>,
-      countryName(item.country),
+      <CountryFlag code={item.country} />,
+      item.country || "Unknown",
       `${item.unique_visitors || 0} unique`,
       item.clicks,
     ),
@@ -1219,9 +1226,8 @@ function Analytics({
       <div className="pagebar">
         <div>
           <h2>Analytics</h2>
-          <p>Traffic, audience and link performance from real redirect events.</p>
+          <p>Traffic performance by period and smart link.</p>
         </div>
-        <button onClick={() => void exportCsv()}>Export filtered CSV</button>
       </div>
       <div className="analyticsbar card">
         <div className="segment" aria-label="Analytics period">
@@ -1234,11 +1240,7 @@ function Analytics({
                 setPage(1);
               }}
             >
-              {item === "day"
-                ? "Days · 30"
-                : item === "week"
-                  ? "Weeks · 12"
-                  : "Months · 12"}
+              {item === "day" ? "Day" : item === "week" ? "Week" : "Month"}
             </button>
           ))}
         </div>
@@ -1267,6 +1269,7 @@ function Analytics({
             ["geo", "Geography"],
             ["devices", "Devices & OS"],
             ["links", "Links"],
+            ["visits", "Visits"],
           ] as [AnalyticsView, string][]
         ).map(([id, label]) => (
           <button
@@ -1279,7 +1282,8 @@ function Analytics({
         ))}
       </div>
       {error && <div className="analyticserror">{error}</div>}
-      <div className="stats">
+      {view === "overview" && <div className="analytics-overview">
+      <div className="stats analytics-summary">
         <Stat
           icon={MousePointer2}
           label={`Recorded clicks · ${periodLabel.toLowerCase()}`}
@@ -1306,10 +1310,10 @@ function Analytics({
       >
         <CardTitle
           title="Click activity"
-          sub={`Clicks and unique visitors grouped by ${period}`}
+          sub={period === "day" ? "Clicks and unique visitors by hour" : "Clicks and unique visitors by day"}
           action={periodLabel}
         />
-        <ResponsiveContainer width="100%" height={320}>
+        <ResponsiveContainer width="100%" height={270}>
           <LineChart
             data={timeline}
             margin={{ top: 12, right: 18, bottom: 4, left: -8 }}
@@ -1372,25 +1376,7 @@ function Analytics({
           </LineChart>
         </ResponsiveContainer>
       </div>
-      {view === "overview" && (
-        <div className="analyticsgrid">
-          <div className="card breakdown">
-            <CardTitle title="Top geography" sub="Countries by clicks" action={`${stats?.countries.length || 0} countries`} />
-            {countryRows.slice(0, 5)}
-            {!countryRows.length && <div className="emptymini">No geography data</div>}
-          </div>
-          <div className="card breakdown">
-            <CardTitle title="Devices & OS" sub="Audience technology" action={`${stats?.devices?.length || 0} groups`} />
-            {deviceRows.slice(0, 5)}
-            {!deviceRows.length && <div className="emptymini">No device data</div>}
-          </div>
-          <div className="card breakdown">
-            <CardTitle title="Link performance" sub="Traffic by smart link" action={`${stats?.links?.length || 0} links`} />
-            {linkRows.slice(0, 5)}
-            {!linkRows.length && <div className="emptymini">No link data</div>}
-          </div>
-        </div>
-      )}
+      </div>}
       {view === "geo" && (
         <div className="card breakdown breakdownwide">
           <CardTitle title="Geography" sub="Country-level traffic and unique visitors" action={`${stats?.countries.length || 0} countries`} />
@@ -1409,46 +1395,42 @@ function Analytics({
           {linkRows.length ? linkRows : <div className="emptymini">No link traffic</div>}
         </div>
       )}
-      <div className="tabletools">
-        <div>
-          <h3>All visits</h3>
-          <span>{stats?.pagination?.total || 0} matching events</span>
+      {view === "visits" && (
+        <div className="visitsview">
+          <div className="tabletools">
+            <div>
+              <h3>Visit log</h3>
+              <span>Raw redirect events</span>
+            </div>
+            <div className="visitactions">
+              <button onClick={() => void exportCsv()}>Export CSV</button>
+              <input
+                placeholder="Search visits…"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </div>
+          </div>
+          <RecentClicks analytics={stats} links={data.links} />
+          <div className="pagination">
+            <button
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
+            >
+              <ChevronLeft size={16} /> Previous
+            </button>
+            <span>
+              Page <b>{page}</b> of <b>{pages}</b>
+            </span>
+            <button
+              disabled={page >= pages || loading}
+              onClick={() => setPage((value) => Math.min(pages, value + 1))}
+            >
+              Next <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
-        <input
-          placeholder="Filter by source, GEO, OS, model or destination…"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </div>
-      <RecentClicks analytics={stats} links={data.links} />
-      <div className="pagination">
-        <button
-          disabled={page <= 1 || loading}
-          onClick={() => setPage((value) => Math.max(1, value - 1))}
-        >
-          <ChevronLeft size={16} /> Previous
-        </button>
-        <span>
-          Page <b>{page}</b> of <b>{pages}</b>
-        </span>
-        <button
-          disabled={page >= pages || loading}
-          onClick={() => setPage((value) => Math.min(pages, value + 1))}
-        >
-          Next <ChevronRight size={16} />
-        </button>
-      </div>
-      <div className="privacy">
-        <ShieldCheck />
-        <span>
-          <b>No fabricated metrics</b>
-          <p>
-            Unknown means the edge proxy did not provide that value. Full IP
-            addresses are not stored; unique visitors use a first-party
-            anonymous identifier.
-          </p>
-        </span>
-      </div>
+      )}
     </section>
   );
 }
@@ -1497,14 +1479,16 @@ function RecentClicks({
                   <small title={e.referrer}>{e.referrer}</small>
                 </td>
                 <td className="iconcell">
-                  <span className="tableicon flag">{flagFor(e.country)}</span>
+                  <span className="tableicon countryflagwrap">
+                    <CountryFlag code={e.country} size={21} />
+                  </span>
                   <span>
                     <b>
                       {[e.city, e.region]
                         .filter((x) => x && x !== "Unknown")
-                        .join(", ") || countryName(e.country)}
+                        .join(", ") || e.country || "Unknown"}
                     </b>
-                    <small>{countryName(e.country)}</small>
+                    <small>{e.country || "Unknown"}</small>
                   </span>
                 </td>
                 <td className="iconcell">
@@ -1587,10 +1571,16 @@ function LinkModal({
   done: () => void;
 }) {
   const isEdit = !!initial;
+  const exitPage = withExitPageDefaults({ ...(initial || {}) });
   const [landingOn, setLandingOn] = useState(Boolean(initial?.landing));
-  const [mode, setMode] = useState(
-    initial?.landingMode === "app" ? "app" : "browser",
-  );
+  const [mode, setMode] = useState(exitPage.mode);
+  const [landingHeading, setLandingHeading] = useState(exitPage.heading);
+  const [landingSubtext, setLandingSubtext] = useState(exitPage.subtext);
+  const [landingButton, setLandingButton] = useState(exitPage.button);
+  const [landingCopy, setLandingCopy] = useState(exitPage.copyLabel);
+  const [landingDirect, setLandingDirect] = useState(exitPage.directLabel);
+  const [landingCountdown, setLandingCountdown] = useState(String(exitPage.countdown));
+  const [countdownError, setCountdownError] = useState("");
   const available = domains.filter((d) => d.status === "active");
   const [bulk, setBulk] = useState(false);
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -1605,15 +1595,19 @@ function LinkModal({
       body.domain = f.get("domain");
     }
     if (landingOn) {
+      if (!isValidCountdownInput(landingCountdown)) {
+        setCountdownError(`Auto-redirect must be at least ${EXIT_PAGE_DEFAULTS.countdown} seconds.`);
+        return;
+      }
       body.landing = true;
       body.landingMode = mode;
       if (mode === "app") body.landingScheme = f.get("landingScheme") || "";
-      body.landingHeading = f.get("landingHeading") || "";
-      body.landingSubtext = f.get("landingSubtext") || "";
-      body.landingButton = f.get("landingButton") || "";
-      body.landingCopy = f.get("landingCopy") || "";
-      body.landingDirect = f.get("landingDirect") || "";
-      body.landingCountdown = Number(f.get("landingCountdown") || 2);
+      body.landingHeading = landingHeading;
+      body.landingSubtext = landingSubtext;
+      body.landingButton = landingButton;
+      body.landingCopy = landingCopy;
+      body.landingDirect = landingDirect;
+      body.landingCountdown = normalizeCountdown(landingCountdown);
     } else {
       body.landing = false;
     }
@@ -1770,7 +1764,7 @@ function LinkModal({
                 Mode
                 <select
                   value={mode}
-                  onChange={(e) => setMode(e.target.value)}
+                  onChange={(e) => setMode(e.target.value === "app" ? "app" : "browser")}
                 >
                   <option value="browser">Open in external browser</option>
                   <option value="app">Deep link into an app</option>
@@ -1795,8 +1789,9 @@ function LinkModal({
                   Heading
                   <input
                     name="landingHeading"
-                    defaultValue={initial?.landingHeading || ""}
-                    placeholder="Opening in your browser…"
+                    value={landingHeading}
+                    onChange={(e) => setLandingHeading(e.target.value)}
+                    placeholder={EXIT_PAGE_DEFAULTS.heading}
                     maxLength={80}
                   />
                 </label>
@@ -1805,19 +1800,35 @@ function LinkModal({
                   <input
                     name="landingCountdown"
                     type="number"
-                    min={0}
-                    max={15}
-                    defaultValue={initial?.landingCountdown ?? 2}
+                    min={3}
+                    step={1}
+                    value={landingCountdown}
+                    onChange={(e) => {
+                      setLandingCountdown(e.target.value);
+                      setCountdownError(isValidCountdownInput(e.target.value) ? "" : "Auto-redirect must be at least 3 seconds.");
+                    }}
+                    onBlur={() => {
+                      if (!isValidCountdownInput(landingCountdown)) {
+                        setCountdownError("Auto-redirect must be at least 3 seconds.");
+                        return;
+                      }
+                      setLandingCountdown(String(normalizeCountdown(landingCountdown)));
+                      setCountdownError("");
+                    }}
+                    aria-invalid={Boolean(countdownError)}
+                    aria-describedby={countdownError ? "landing-countdown-error" : undefined}
                   />
+                  {countdownError && <span className="field-error" id="landing-countdown-error">{countdownError}</span>}
                 </label>
               </div>
               <label>
                 Subtext
                 <input
                   name="landingSubtext"
-                  defaultValue={initial?.landingSubtext || ""}
-                  placeholder="You are being redirected outside this app for the best experience."
-                  maxLength={140}
+                  value={landingSubtext}
+                  onChange={(e) => setLandingSubtext(e.target.value)}
+                  placeholder={EXIT_PAGE_DEFAULTS.subtext}
+                  maxLength={220}
                 />
               </label>
               <div className="fieldrow2">
@@ -1825,8 +1836,9 @@ function LinkModal({
                   Button label
                   <input
                     name="landingButton"
-                    defaultValue={initial?.landingButton || ""}
-                    placeholder="Continue"
+                    value={landingButton}
+                    onChange={(e) => setLandingButton(e.target.value)}
+                    placeholder={EXIT_PAGE_DEFAULTS.button}
                     maxLength={40}
                   />
                 </label>
@@ -1834,8 +1846,9 @@ function LinkModal({
                   Copy button label
                   <input
                     name="landingCopy"
-                    defaultValue={initial?.landingCopy || ""}
-                    placeholder="Copy link"
+                    value={landingCopy}
+                    onChange={(e) => setLandingCopy(e.target.value)}
+                    placeholder={EXIT_PAGE_DEFAULTS.copyLabel}
                     maxLength={40}
                   />
                 </label>
@@ -1844,11 +1857,20 @@ function LinkModal({
                 Direct link label
                 <input
                   name="landingDirect"
-                  defaultValue={initial?.landingDirect || ""}
-                  placeholder="Continue in browser"
+                  value={landingDirect}
+                  onChange={(e) => setLandingDirect(e.target.value)}
+                  placeholder={EXIT_PAGE_DEFAULTS.directLabel}
                   maxLength={40}
                 />
               </label>
+              <ExitPagePreview
+                heading={landingHeading}
+                subtext={landingSubtext}
+                button={landingButton}
+                copyLabel={landingCopy}
+                directLabel={landingDirect}
+                countdown={landingCountdown}
+              />
             </div>
           )}
         </div>
