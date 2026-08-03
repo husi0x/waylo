@@ -12,7 +12,7 @@ const seed={domains:[],links:[],events:[],page:{slug:'profile',name:'Your profil
 function load(){try{return JSON.parse(fs.readFileSync(file,'utf8'))}catch{return structuredClone(seed)}} let db=load();
 const save=()=>fs.writeFileSync(file,JSON.stringify(db,null,2));
 const hashPassword=password=>{const salt=crypto.randomBytes(16).toString('hex');return{salt,hash:crypto.scryptSync(password,salt,64).toString('hex')}};
-if(!db.auth)db.auth={sessionSecret:crypto.randomBytes(32).toString('hex')};if(process.env.ADMIN_PASSWORD&&!db.auth.hash)Object.assign(db.auth,hashPassword(process.env.ADMIN_PASSWORD));save();
+if(!db.auth)db.auth={};if(!db.auth.sessionSecret)db.auth.sessionSecret=crypto.randomBytes(32).toString('hex');if(process.env.ADMIN_PASSWORD&&!db.auth.hash)Object.assign(db.auth,hashPassword(process.env.ADMIN_PASSWORD));save();
 const trackingTarget=String(process.env.TRACKING_CNAME||'tracker.your-service.com').toLowerCase();for(const domain of db.domains){if(!domain.verificationToken)domain.verificationToken='rk_verify_'+crypto.randomBytes(12).toString('hex');domain.verificationHost='_routekit-verification.'+domain.host;domain.target=trackingTarget}save();
 const parseCookie=(header,name)=>String(header||'').split(';').map(x=>x.trim().split('=')).find(x=>x[0]===name)?.slice(1).join('=');
 const sessionToken=()=>{const payload=Buffer.from(JSON.stringify({exp:Date.now()+86400000})).toString('base64url');const sig=crypto.createHmac('sha256',db.auth.sessionSecret).update(payload).digest('base64url');return payload+'.'+sig};
