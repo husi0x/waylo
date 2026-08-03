@@ -1,4 +1,6 @@
-# Waylo
+<p align="center">
+  <img src="assets/waylo-logo.svg" width="360" alt="Waylo">
+</p>
 
 Waylo is a self-hosted smart-link, first-party click analytics and link-in-bio platform. It routes visitors through domains you control, records real redirect events and supports rules by country, device and operating system.
 
