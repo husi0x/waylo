@@ -62,6 +62,7 @@ type Link = {
   landingCopy?: string;
   landingDirect?: string;
   landingCountdown?: number;
+  bulk?: boolean;
 };
 type Domain = {
   id: string;
@@ -1248,15 +1249,18 @@ function LinkModal({
     initial?.landingMode === "app" ? "app" : "browser",
   );
   const available = domains.filter((d) => d.status === "active");
+  const [bulk, setBulk] = useState(false);
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const body: Record<string, unknown> = {
       name: f.get("name"),
-      slug: f.get("slug"),
-      domain: f.get("domain"),
       destination: f.get("destination"),
     };
+    if (!isEdit) {
+      body.slug = f.get("slug");
+      body.domain = f.get("domain");
+    }
     if (landingOn) {
       body.landing = true;
       body.landingMode = mode;
@@ -1270,16 +1274,34 @@ function LinkModal({
     } else {
       body.landing = false;
     }
+    if (bulk && !isEdit) {
+      body.prefix = String(f.get("slug") || "")
+        .replace(/^\//, "")
+        .replace(/\/$/, "");
+      body.bulk = true;
+    }
     const res = await fetch(
-      isEdit ? "/api/links/" + initial!.id : "/api/links",
+      bulk && !isEdit
+        ? "/api/links/bulk"
+        : isEdit
+          ? "/api/links/" + initial!.id
+          : "/api/links",
       {
-        method: isEdit ? "PATCH" : "POST",
+        method: bulk && !isEdit ? "POST" : isEdit ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       },
     );
-    if (!res.ok)
-      return notify((await res.json()).error || "Could not save link");
+    if (!res.ok) {
+      const text = await res.text();
+      let message = "Could not save link";
+      try {
+        message = JSON.parse(text).error || message;
+      } catch {
+        if (text && !text.trimStart().startsWith("<")) message = text;
+      }
+      return notify(message);
+    }
     done();
   };
   return (
@@ -1329,20 +1351,23 @@ function LinkModal({
           </select>
         </label>
         <label>
-          Short path
+          {bulk ? "Bulk prefix" : "Short path"}
           <div className="prefix">
             <span>/</span>
             <input
               name="slug"
               defaultValue={initial?.slug || ""}
-              placeholder="summer"
-              pattern="[a-zA-Z0-9-_]*"
+              placeholder={bulk ? "of" : "summer"}
+              pattern="[a-zA-Z0-9_/-]*"
+              required={bulk}
               disabled={isEdit}
             />
           </div>
           {!isEdit && (
             <span className="hint">
-              Leave empty to redirect the domain root (e.g. yourdomain.com/).
+              {bulk
+                ? "Any URL under this prefix redirects to the same destination (e.g. /of/a, /of/anything, /of/a/b)."
+                : "Leave empty to redirect the domain root. Slash creates a nested path (e.g. of/jsjdc)."}
             </span>
           )}
         </label>
@@ -1356,6 +1381,23 @@ function LinkModal({
             required
           />
         </label>
+        {!isEdit && (
+          <label className="switchline bulkswitch">
+            <span>
+              <b>Bulk wildcard</b>
+              <small>
+                Use one prefix for unlimited paths, all leading to the same
+                destination and statistics.
+              </small>
+            </span>
+            <input
+              type="checkbox"
+              checked={bulk}
+              onChange={(e) => setBulk(e.target.checked)}
+            />
+          </label>
+        )}
+
         <div className="modalsect">
           <div className="secttitle">
             <span>EXIT PAGE</span>
