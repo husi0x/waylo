@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+data.json
+analytics.db
+analytics.db-shm
+analytics.db-wal
+storage/
+*.log
+.DS_Store
+.idea/
+.vscode/
+coverage/
+tracker/
+waylo/

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="180" viewBox="0 0 360 180" role="img" aria-labelledby="title desc">
+  <title id="title">waylo</title>
+  <desc id="desc">Waylo lowercase wordmark with the tail of the letter y continuing into a route ending in one point.</desc>
+  <g fill="none" stroke="#6D5CE7" stroke-linecap="round" stroke-linejoin="round">
+    <text x="28" y="116"
+          fill="#6D5CE7"
+          stroke="none"
+          font-family="Arial, Helvetica, sans-serif"
+          font-size="104"
+          font-weight="700"
+          letter-spacing="-6">waylo</text>
+    <path d="M 190 125 C 187 140, 174 149, 157 149" stroke-width="8"/>
+  </g>
+  <circle cx="149" cy="149" r="6" fill="#6D5CE7"/>
+</svg>
