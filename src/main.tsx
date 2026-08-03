@@ -1336,11 +1336,15 @@ function LinkModal({
               name="slug"
               defaultValue={initial?.slug || ""}
               placeholder="summer"
-              required
-              pattern="[a-zA-Z0-9-_]+"
+              pattern="[a-zA-Z0-9-_]*"
               disabled={isEdit}
             />
           </div>
+          {!isEdit && (
+            <span className="hint">
+              Leave empty to redirect the domain root (e.g. yourdomain.com/).
+            </span>
+          )}
         </label>
         <label>
           Default destination
