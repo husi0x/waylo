@@ -12,6 +12,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY server.mjs ./
+COPY landing.mjs ./
 EXPOSE 8787
 VOLUME ["/app/storage"]
 CMD ["node","server.mjs"]

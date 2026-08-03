@@ -52,6 +52,15 @@ type Link = {
   status: string;
   rules: number;
   routes?: RouteRule[];
+  landing?: boolean;
+  landingMode?: string;
+  landingScheme?: string;
+  landingHeading?: string;
+  landingSubtext?: string;
+  landingButton?: string;
+  landingCopy?: string;
+  landingDirect?: string;
+  landingCountdown?: number;
 };
 type Domain = {
   id: string;
@@ -121,7 +130,7 @@ function App() {
   } | null>(null);
   const [data, setData] = useState<State | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-  const [modal, setModal] = useState(false);
+  const [modal, setModal] = useState<null | "new" | Link>(null);
   const [toast, setToast] = useState("");
   const refresh = () =>
     Promise.all([
@@ -169,25 +178,6 @@ function App() {
         <div className="logo">R</div> Loading workspace…
       </div>
     );
-  const addLink = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    const res = await fetch("/api/links", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        name: f.get("name"),
-        slug: f.get("slug"),
-        domain: f.get("domain"),
-        destination: f.get("destination"),
-      }),
-    });
-    if (!res.ok)
-      return notify((await res.json()).error || "Could not create link");
-    setModal(false);
-    refresh();
-    notify("Smart link created");
-  };
   return (
     <div className="app">
       <Sidebar tab={tab} setTab={setTab} />
@@ -199,7 +189,8 @@ function App() {
         {tab === "Smart links" && (
           <Links
             data={data}
-            onAdd={() => setModal(true)}
+            onAdd={() => setModal("new")}
+            onEdit={(l: Link) => setModal(l)}
             refresh={refresh}
             notify={notify}
           />
@@ -216,10 +207,17 @@ function App() {
         {tab === "Settings" && <SettingsPage />}
       </main>
       {modal && (
-        <NewLink
+        <LinkModal
+          initial={modal === "new" ? null : modal}
           domains={data.domains}
-          close={() => setModal(false)}
-          submit={addLink}
+          close={() => setModal(null)}
+          notify={notify}
+          done={() => {
+            const created = modal === "new";
+            setModal(null);
+            refresh();
+            notify(created ? "Smart link created" : "Link updated");
+          }}
         />
       )}{" "}
       {toast && (
@@ -428,7 +426,7 @@ function CardTitle({ title, sub, action }: any) {
     </div>
   );
 }
-function Links({ data, onAdd, refresh, notify }: any) {
+function Links({ data, onAdd, onEdit, refresh, notify }: any) {
   const [selected, setSelected] = useState<Link | null>(null);
   const del = async (id: string) => {
     await fetch("/api/links/" + id, { method: "DELETE" });
@@ -467,6 +465,9 @@ function Links({ data, onAdd, refresh, notify }: any) {
                     <Link2 size={17} />
                   </span>
                   <b>{l.name}</b>
+                  {l.landing && (
+                    <span className="pill exitpill">exit page</span>
+                  )}
                   <small>
                     https://{l.domain}/{l.slug}
                   </small>
@@ -484,6 +485,9 @@ function Links({ data, onAdd, refresh, notify }: any) {
                   <span className={"pill " + l.status}>{l.status}</span>
                 </td>
                 <td>
+                  <button className="icon" title="Edit link" onClick={() => onEdit(l)}>
+                    <Settings size={16} />
+                  </button>
                   <button
                     className="icon"
                     onClick={() =>
@@ -1192,26 +1196,73 @@ function SettingsPage() {
     </section>
   );
 }
-function NewLink({
+function LinkModal({
   domains,
+  initial,
   close,
-  submit,
+  notify,
+  done,
 }: {
   domains: Domain[];
+  initial: Link | null;
   close: () => void;
-  submit: (e: React.FormEvent<HTMLFormElement>) => void;
+  notify: (s: string) => void;
+  done: () => void;
 }) {
+  const isEdit = !!initial;
+  const [landingOn, setLandingOn] = useState(Boolean(initial?.landing));
+  const [mode, setMode] = useState(
+    initial?.landingMode === "app" ? "app" : "browser",
+  );
   const available = domains.filter((d) => d.status === "active");
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const body: Record<string, unknown> = {
+      name: f.get("name"),
+      slug: f.get("slug"),
+      domain: f.get("domain"),
+      destination: f.get("destination"),
+    };
+    if (landingOn) {
+      body.landing = true;
+      body.landingMode = mode;
+      if (mode === "app") body.landingScheme = f.get("landingScheme") || "";
+      body.landingHeading = f.get("landingHeading") || "";
+      body.landingSubtext = f.get("landingSubtext") || "";
+      body.landingButton = f.get("landingButton") || "";
+      body.landingCopy = f.get("landingCopy") || "";
+      body.landingDirect = f.get("landingDirect") || "";
+      body.landingCountdown = Number(f.get("landingCountdown") || 2);
+    } else {
+      body.landing = false;
+    }
+    const res = await fetch(
+      isEdit ? "/api/links/" + initial!.id : "/api/links",
+      {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    if (!res.ok)
+      return notify((await res.json()).error || "Could not save link");
+    done();
+  };
   return (
     <div
       className="overlay"
       onMouseDown={(e) => e.target === e.currentTarget && close()}
     >
-      <form className="modal" onSubmit={submit}>
+      <form className="modal wide" onSubmit={submit}>
         <div>
           <span>
-            <h2>Create smart link</h2>
-            <p>Choose exactly which connected domain will serve this link.</p>
+            <h2>{isEdit ? "Edit smart link" : "Create smart link"}</h2>
+            <p>
+              {isEdit
+                ? "Update the destination or exit page settings."
+                : "Choose exactly which connected domain will serve this link."}
+            </p>
           </span>
           <button type="button" className="icon" onClick={close}>
             <X />
@@ -1219,11 +1270,21 @@ function NewLink({
         </div>
         <label>
           Link name
-          <input name="name" placeholder="Instagram campaign" required />
+          <input
+            name="name"
+            defaultValue={initial?.name || ""}
+            placeholder="Instagram campaign"
+            required
+          />
         </label>
         <label>
           Domain
-          <select name="domain" required defaultValue="">
+          <select
+            name="domain"
+            defaultValue={initial?.domain || ""}
+            disabled={isEdit}
+            required
+          >
             <option value="" disabled>
               Select an active domain…
             </option>
@@ -1240,9 +1301,11 @@ function NewLink({
             <span>/</span>
             <input
               name="slug"
+              defaultValue={initial?.slug || ""}
               placeholder="summer"
               required
               pattern="[a-zA-Z0-9-_]+"
+              disabled={isEdit}
             />
           </div>
         </label>
@@ -1250,11 +1313,123 @@ function NewLink({
           Default destination
           <input
             name="destination"
+            defaultValue={initial?.destination || ""}
             type="url"
             placeholder="https://example.com/offer"
             required
           />
         </label>
+        <div className="modalsect">
+          <div className="secttitle">
+            <span>EXIT PAGE</span>
+            <small>
+              Intercept in-app browsers and hand the visitor to the device's
+              real browser — or straight into a native app.
+            </small>
+          </div>
+          <label className="switchline">
+            <span>
+              <b>Smart exit page</b>
+              <small>
+                When the link is tapped inside Instagram, TikTok, Facebook, X or
+                other in-app browsers, a branded page opens the destination
+                outside the app. Normal browsers are redirected instantly.
+              </small>
+            </span>
+            <input
+              type="checkbox"
+              checked={landingOn}
+              onChange={(e) => setLandingOn(e.target.checked)}
+            />
+          </label>
+          {landingOn && (
+            <div className="landingbox">
+              <label>
+                Mode
+                <select
+                  value={mode}
+                  onChange={(e) => setMode(e.target.value)}
+                >
+                  <option value="browser">Open in external browser</option>
+                  <option value="app">Deep link into an app</option>
+                </select>
+              </label>
+              {mode === "app" && (
+                <label>
+                  App deep link
+                  <input
+                    name="landingScheme"
+                    defaultValue={initial?.landingScheme || ""}
+                    placeholder="onlyfans://username"
+                  />
+                  <span className="hint">
+                    Custom URL scheme (e.g. onlyfans://user). Opens the app when
+                    installed, falls back to the destination otherwise.
+                  </span>
+                </label>
+              )}
+              <div className="fieldrow">
+                <label>
+                  Heading
+                  <input
+                    name="landingHeading"
+                    defaultValue={initial?.landingHeading || ""}
+                    placeholder="Opening in your browser…"
+                    maxLength={80}
+                  />
+                </label>
+                <label>
+                  Auto-redirect (sec)
+                  <input
+                    name="landingCountdown"
+                    type="number"
+                    min={0}
+                    max={15}
+                    defaultValue={initial?.landingCountdown ?? 2}
+                  />
+                </label>
+              </div>
+              <label>
+                Subtext
+                <input
+                  name="landingSubtext"
+                  defaultValue={initial?.landingSubtext || ""}
+                  placeholder="You are being redirected outside this app for the best experience."
+                  maxLength={140}
+                />
+              </label>
+              <div className="fieldrow2">
+                <label>
+                  Button label
+                  <input
+                    name="landingButton"
+                    defaultValue={initial?.landingButton || ""}
+                    placeholder="Continue"
+                    maxLength={40}
+                  />
+                </label>
+                <label>
+                  Copy button label
+                  <input
+                    name="landingCopy"
+                    defaultValue={initial?.landingCopy || ""}
+                    placeholder="Copy link"
+                    maxLength={40}
+                  />
+                </label>
+              </div>
+              <label>
+                Direct link label
+                <input
+                  name="landingDirect"
+                  defaultValue={initial?.landingDirect || ""}
+                  placeholder="Continue in browser"
+                  maxLength={40}
+                />
+              </label>
+            </div>
+          )}
+        </div>
         {!available.length && (
           <div className="autherror">
             Add and verify at least one domain first.
@@ -1265,7 +1440,7 @@ function NewLink({
             Cancel
           </button>
           <button className="primary" disabled={!available.length}>
-            Create link
+            {isEdit ? "Save changes" : "Create link"}
           </button>
         </div>
       </form>
