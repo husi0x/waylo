@@ -8,7 +8,7 @@ import Database from 'better-sqlite3';
 import {renderLanding} from './landing.mjs';
 const app=express(); app.use(express.json({limit:'1mb'}));const adminHost=String(process.env.ADMIN_HOST||'').toLowerCase();const adminPath=String(process.env.ADMIN_PATH||'admin').replace(/^\/+|\/+$/g,'');app.use(['/'+adminPath,'/api'],(q,r,next)=>{if(!adminHost)return next();const host=String(q.get('x-forwarded-host')||q.get('host')||'').split(':')[0].toLowerCase();return host===adminHost?next():r.status(404).send('Not found')});
 const appDir=path.dirname(fileURLToPath(import.meta.url));const dataDir=process.env.DATA_DIR?path.resolve(process.env.DATA_DIR):appDir;fs.mkdirSync(dataDir,{recursive:true});const file=path.join(dataDir,'data.json');
-const seed={domains:[],links:[],events:[],page:{slug:'profile',name:'Your profile',bio:'Add a short description',accent:'#7c5cff',blocks:[]}};
+const seed={domains:[],links:[],events:[],page:{slug:crypto.randomBytes(4).toString('base64url').replace(/[^a-zA-Z0-9_-]/g,'w'),name:'Your profile',bio:'Add a short description',accent:'#7c5cff',blocks:[]}};
 function load(){try{return JSON.parse(fs.readFileSync(file,'utf8'))}catch{return structuredClone(seed)}} let db=load();
 const save=()=>fs.writeFileSync(file,JSON.stringify(db,null,2));
 const hashPassword=password=>{const salt=crypto.randomBytes(16).toString('hex');return{salt,hash:crypto.scryptSync(password,salt,64).toString('hex')}};

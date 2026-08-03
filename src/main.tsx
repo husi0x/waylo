@@ -15,6 +15,7 @@ import {
   MousePointer2,
   Plus,
   Route,
+  RotateCw,
   Save,
   Settings,
   ShieldCheck,
@@ -823,6 +824,38 @@ function Builder({ data, setData, notify }: any) {
               value={p.name}
               onChange={(e) => update({ name: e.target.value })}
             />
+          </label>
+          <label>
+            Profile address
+            <div className="prefix">
+              <span>/p/</span>
+              <input
+                value={p.slug}
+                onChange={(e) =>
+                  update({
+                    slug: e.target.value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40),
+                  })
+                }
+                placeholder="profile"
+              />
+              <button
+                type="button"
+                className="icon slugrandom"
+                title="Random address"
+                onClick={() =>
+                  update({
+                    slug: Array.from(crypto.getRandomValues(new Uint8Array(6)))
+                      .map((b) => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36])
+                      .join(""),
+                  })
+                }
+              >
+                <RotateCw size={15} />
+              </button>
+            </div>
+            <span className="hint">
+              Your page: <a href={"/p/" + p.slug} target="_blank" rel="noreferrer">/p/{p.slug}</a>
+            </span>
           </label>
           <label>
             Bio
