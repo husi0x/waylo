@@ -1582,20 +1582,6 @@ function SettingsPage() {
           <p>Keep the workspace identity and data policy in one clear place.</p>
         </div>
       </div>
-      <div className="workspacefacts" aria-label="Workspace status">
-        <div>
-          <span>Admin session</span>
-          <b>Protected</b>
-        </div>
-        <div>
-          <span>Analytics</span>
-          <b>First-party</b>
-        </div>
-        <div>
-          <span>Default retention</span>
-          <b>90 days</b>
-        </div>
-      </div>
       <div className="settingslayout">
         <div className="card form settings">
           <div className="settingsheading">
@@ -1626,24 +1612,6 @@ function SettingsPage() {
             </select>
           </label>
           <button className="primary" type="button"><Save size={16} /> Save changes</button>
-        </div>
-        <div className="card settingsstatus">
-          <CardTitle title="Workspace health" sub="Current protection and storage state" action="All systems normal" />
-          <div className="statusrow">
-            <span className="metricicon"><ShieldCheck size={17} /></span>
-            <span><b>Secure administrator access</b><small>Protected by the configured workspace password.</small></span>
-            <em>Active</em>
-          </div>
-          <div className="statusrow">
-            <span className="metricicon"><Activity size={17} /></span>
-            <span><b>Local event storage</b><small>Redirect events stay in the workspace SQLite database.</small></span>
-            <em>Connected</em>
-          </div>
-          <div className="statusrow">
-            <span className="metricicon"><BarChart3 size={17} /></span>
-            <span><b>First-party reporting</b><small>No external analytics script is required.</small></span>
-            <em>Enabled</em>
-          </div>
         </div>
       </div>
     </section>
