@@ -29,7 +29,31 @@ app.post('/api/auth/login',(q,r)=>{if(!verifyPassword(q.body.password))return r.
 app.post('/api/auth/logout',(_q,r)=>r.clearCookie('rk_admin',{path:'/'}).json({ok:true}));
 app.use('/api',(q,r,next)=>validSession(parseCookie(q.get('cookie'),'rk_admin'))?next():r.status(401).json({error:'Authentication required'}));
 app.get('/api/state',(_q,r)=>r.json({...db,auth:undefined}));
-app.get('/api/analytics',(q,r)=>{const days=Math.min(365,Math.max(1,Number(q.query.days)||30));const limit=Math.min(500,Math.max(1,Number(q.query.limit)||100));const offset=Math.max(0,Number(q.query.offset)||0);const since=new Date(Date.now()-days*86400000).toISOString();const where=['internal = 0','created_at >= ?'];const args=[since];if(q.query.linkId){where.push('link_id = ?');args.push(String(q.query.linkId))}if(q.query.country){where.push('country = ?');args.push(String(q.query.country))}if(q.query.source){where.push('source = ?');args.push(String(q.query.source))}const clause=where.join(' AND ');const summary=analyticsDb.prepare(`SELECT COUNT(*) clicks,COUNT(DISTINCT visitor_id) unique_visitors,COUNT(DISTINCT country) countries FROM click_events WHERE ${clause}`).get(...args);const events=analyticsDb.prepare(`SELECT * FROM click_events WHERE ${clause} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...args,limit,offset);const daily=analyticsDb.prepare(`SELECT substr(created_at,1,10) day,COUNT(*) clicks,COUNT(DISTINCT visitor_id) unique_visitors FROM click_events WHERE ${clause} GROUP BY day ORDER BY day`).all(...args);const countries=analyticsDb.prepare(`SELECT country,COUNT(*) clicks FROM click_events WHERE ${clause} GROUP BY country ORDER BY clicks DESC LIMIT 20`).all(...args);const sources=analyticsDb.prepare(`SELECT source,COUNT(*) clicks FROM click_events WHERE ${clause} GROUP BY source ORDER BY clicks DESC LIMIT 20`).all(...args);r.json({summary,events,daily,countries,sources,days,limit,offset})});
+app.get('/api/analytics',(q,r)=>{
+  const period=['day','week','month'].includes(String(q.query.period))?String(q.query.period):'day';
+  const defaultDays={day:30,week:84,month:365}[period];
+  const days=Math.min(730,Math.max(1,Number(q.query.days)||defaultDays));
+  const pageSize=Math.min(100,Math.max(10,Number(q.query.pageSize||q.query.limit)||25));
+  const page=Math.max(1,Math.floor(Number(q.query.page)||1));
+  const offset=q.query.offset!==undefined?Math.max(0,Number(q.query.offset)||0):(page-1)*pageSize;
+  const since=new Date(Date.now()-days*86400000).toISOString();
+  const where=['internal = 0','created_at >= ?'];
+  const args=[since];
+  const add=(sql,value)=>{if(value!==undefined&&String(value)!==''){where.push(sql);args.push(String(value))}};
+  add('link_id = ?',q.query.linkId);add('country = ?',q.query.country);add('source = ?',q.query.source);add('device = ?',q.query.device);add('os = ?',q.query.os);
+  if(q.query.q){const value='%'+String(q.query.q).slice(0,100)+'%';where.push('(source LIKE ? OR referrer LIKE ? OR country LIKE ? OR region LIKE ? OR city LIKE ? OR device LIKE ? OR device_model LIKE ? OR os LIKE ? OR browser LIKE ? OR destination LIKE ?)');for(let i=0;i<10;i++)args.push(value)}
+  const clause=where.join(' AND ');
+  const bucket={day:"substr(created_at,1,10)",week:"strftime('%Y-W%W',created_at)",month:"substr(created_at,1,7)"}[period];
+  const summary=analyticsDb.prepare(`SELECT COUNT(*) clicks,COUNT(DISTINCT visitor_id) unique_visitors,COUNT(DISTINCT country) countries,COUNT(DISTINCT link_id) links FROM click_events WHERE ${clause}`).get(...args);
+  const total=Number(summary.clicks)||0;
+  const events=analyticsDb.prepare(`SELECT * FROM click_events WHERE ${clause} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...args,pageSize,offset);
+  const timeline=analyticsDb.prepare(`SELECT ${bucket} bucket,COUNT(*) clicks,COUNT(DISTINCT visitor_id) unique_visitors FROM click_events WHERE ${clause} GROUP BY bucket ORDER BY bucket`).all(...args);
+  const countries=analyticsDb.prepare(`SELECT country,COUNT(*) clicks,COUNT(DISTINCT visitor_id) unique_visitors FROM click_events WHERE ${clause} GROUP BY country ORDER BY clicks DESC,country LIMIT 100`).all(...args);
+  const devices=analyticsDb.prepare(`SELECT device,os,COUNT(*) clicks,COUNT(DISTINCT visitor_id) unique_visitors FROM click_events WHERE ${clause} GROUP BY device,os ORDER BY clicks DESC,device,os`).all(...args);
+  const links=analyticsDb.prepare(`SELECT link_id,COUNT(*) clicks,COUNT(DISTINCT visitor_id) unique_visitors FROM click_events WHERE ${clause} GROUP BY link_id ORDER BY clicks DESC,link_id`).all(...args);
+  const sources=analyticsDb.prepare(`SELECT source,COUNT(*) clicks FROM click_events WHERE ${clause} GROUP BY source ORDER BY clicks DESC LIMIT 20`).all(...args);
+  r.json({summary,events,daily:timeline.map(x=>({day:x.bucket,...x})),timeline,countries,devices,links,sources,period,days,pagination:{page,pageSize,total,pages:Math.max(1,Math.ceil(total/pageSize)),offset}})
+});
 function safeDestination(value){if(typeof value!=='string')return false;if(value.startsWith('/p/'))return true;try{const u=new URL(value);return u.protocol==='https:'&&!['localhost','127.0.0.1','0.0.0.0','::1'].includes(u.hostname)&&!/^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./.test(u.hostname)}catch{return false}}
 function osOf(ua){if(/iphone|ipad|ios/i.test(ua))return'iOS';if(/android/i.test(ua))return'Android';if(/windows/i.test(ua))return'Windows';if(/macintosh|mac os/i.test(ua))return'macOS';return'Other'}
 function browserOf(ua){if(/Edg\//i.test(ua))return'Edge';if(/OPR\//i.test(ua))return'Opera';if(/Chrome\//i.test(ua))return'Chrome';if(/Firefox\//i.test(ua))return'Firefox';if(/Safari\//i.test(ua))return'Safari';return'Other'}

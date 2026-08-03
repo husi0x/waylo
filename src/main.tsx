@@ -2,7 +2,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
+  Apple,
   BarChart3,
+  Bot,
+  ChevronLeft,
+  ChevronRight,
   ChevronDown,
   Copy,
   ExternalLink,
@@ -21,15 +25,17 @@ import {
   ShieldCheck,
   Smartphone,
   Sparkles,
+  Tablet,
   Trash2,
   Users,
   X,
   Zap,
 } from "lucide-react";
 import {
-  Area,
-  AreaChart,
   CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -102,28 +108,71 @@ type ClickEvent = {
   created_at: string;
 };
 type AnalyticsData = {
-  summary: { clicks: number; unique_visitors: number; countries: number };
+  summary: {
+    clicks: number;
+    unique_visitors: number;
+    countries: number;
+    links?: number;
+  };
   events: ClickEvent[];
   daily: { day: string; clicks: number; unique_visitors: number }[];
-  countries: { country: string; clicks: number }[];
+  timeline?: {
+    bucket: string;
+    clicks: number;
+    unique_visitors: number;
+  }[];
+  countries: {
+    country: string;
+    clicks: number;
+    unique_visitors?: number;
+  }[];
+  devices?: {
+    device: string;
+    os: string;
+    clicks: number;
+    unique_visitors: number;
+  }[];
+  links?: {
+    link_id: string;
+    clicks: number;
+    unique_visitors: number;
+  }[];
   sources: { source: string; clicks: number }[];
+  period?: "day" | "week" | "month";
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    pages: number;
+    offset: number;
+  };
 };
-const chart = [
-  { d: "28 Jul", v: 1140 },
-  { d: "29 Jul", v: 1680 },
-  { d: "30 Jul", v: 1420 },
-  { d: "31 Jul", v: 2130 },
-  { d: "1 Aug", v: 1950 },
-  { d: "2 Aug", v: 2480 },
-  { d: "3 Aug", v: 2310 },
-];
-const countries = [
-  ["United States", 34, "🇺🇸"],
-  ["Germany", 18, "🇩🇪"],
-  ["United Kingdom", 14, "🇬🇧"],
-  ["Brazil", 11, "🇧🇷"],
-  ["Canada", 8, "🇨🇦"],
-];
+type AnalyticsPeriod = "day" | "week" | "month";
+type AnalyticsView = "overview" | "geo" | "devices" | "links";
+
+const flagFor = (code: string) => {
+  const c = String(code || "").toUpperCase();
+  if (!/^[A-Z]{2}$/.test(c)) return "🌐";
+  return String.fromCodePoint(...[...c].map((x) => 127397 + x.charCodeAt(0)));
+};
+const countryName = (code: string) => {
+  if (!/^[A-Z]{2}$/i.test(code)) return code || "Unknown";
+  try {
+    return new Intl.DisplayNames([navigator.language || "en"], {
+      type: "region",
+    }).of(code.toUpperCase()) || code;
+  } catch {
+    return code;
+  }
+};
+function DeviceIcon({ device, os, size = 18 }: any) {
+  if (os === "Android") return <Bot size={size} aria-label="Android" />;
+  if (os === "iOS" || os === "macOS")
+    return <Apple size={size} aria-label={os} />;
+  if (device === "Mobile") return <Smartphone size={size} />;
+  if (device === "Tablet") return <Tablet size={size} />;
+  return <Monitor size={size} />;
+}
 function App() {
   const [tab, setTab] = useState("Overview");
   const [auth, setAuth] = useState<{
@@ -360,19 +409,20 @@ function Overview({
             action="Last 30 days"
           />
           <ResponsiveContainer width="100%" height={265}>
-            <AreaChart data={a?.daily || []}>
+            <LineChart data={a?.daily || []}>
               <CartesianGrid stroke="#ececf2" vertical={false} />
               <XAxis dataKey="day" axisLine={false} tickLine={false} />
               <YAxis allowDecimals={false} axisLine={false} tickLine={false} />
-              <Tooltip />
-              <Area
+              <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid #e6e4f2" }} />
+              <Line
                 type="monotone"
                 dataKey="clicks"
                 stroke="#7357ff"
                 strokeWidth={3}
-                fill="#eeeaff"
+                dot={false}
+                activeDot={{ r: 5, fill: "#7357ff", strokeWidth: 3, stroke: "#fff" }}
               />
-            </AreaChart>
+            </LineChart>
           </ResponsiveContainer>
           {!a?.daily.length && (
             <div className="emptychart">
@@ -966,26 +1016,82 @@ function Builder({ data, setData, notify }: any) {
     </section>
   );
 }
-function Analytics({ data, analytics }: any) {
+function Analytics({
+  data,
+  analytics: initialAnalytics,
+}: {
+  data: State;
+  analytics: AnalyticsData | null;
+  refresh?: () => Promise<any>;
+}) {
+  const [stats, setStats] = useState<AnalyticsData | null>(initialAnalytics);
+  const [period, setPeriod] = useState<AnalyticsPeriod>("day");
+  const [view, setView] = useState<AnalyticsView>("overview");
+  const [linkId, setLinkId] = useState("");
+  const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
-  const visible = {
-    ...analytics,
-    events: (analytics?.events || []).filter((e: ClickEvent) =>
-      [
-        e.source,
-        e.referrer,
-        e.country,
-        e.city,
-        e.os,
-        e.device_model,
-        data.links.find((l: Link) => l.id === e.link_id)?.name,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query.toLowerCase()),
-    ),
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const paramsFor = (requestedPage = page, pageSize = 25) => {
+    const params = new URLSearchParams({
+      period,
+      page: String(requestedPage),
+      pageSize: String(pageSize),
+    });
+    if (linkId) params.set("linkId", linkId);
+    if (appliedQuery) params.set("q", appliedQuery);
+    return params;
   };
-  const exportCsv = () => {
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      setAppliedQuery(query.trim());
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setError("");
+    fetch("/api/analytics?" + paramsFor().toString(), {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok)
+          throw Error(
+            (await response.json().catch(() => null))?.error ||
+              "Analytics request failed",
+          );
+        return response.json();
+      })
+      .then(setStats)
+      .catch((requestError) => {
+        if (requestError.name !== "AbortError") setError(requestError.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [period, linkId, page, appliedQuery, data.links.length]);
+
+  const exportCsv = async () => {
+    let exportPage = 1;
+    let pages = 1;
+    const events: ClickEvent[] = [];
+    do {
+      const response = await fetch(
+        "/api/analytics?" + paramsFor(exportPage, 100),
+      );
+      if (!response.ok) return;
+      const part: AnalyticsData = await response.json();
+      events.push(...part.events);
+      pages = part.pagination?.pages || 1;
+      exportPage += 1;
+    } while (exportPage <= pages);
     const rows = [
       [
         "Time",
@@ -1001,104 +1107,337 @@ function Analytics({ data, analytics }: any) {
         "Browser",
         "Destination",
       ],
-      ...(analytics?.events || []).map((e: ClickEvent) => [
-        e.created_at,
-        data.links.find((l: Link) => l.id === e.link_id)?.name || e.link_id,
-        e.source,
-        e.referrer,
-        e.country,
-        e.region,
-        e.city,
-        e.device,
-        e.device_model,
-        e.os,
-        e.browser,
-        e.destination,
+      ...events.map((event) => [
+        event.created_at,
+        data.links.find((link) => link.id === event.link_id)?.name ||
+          event.link_id,
+        event.source,
+        event.referrer,
+        event.country,
+        event.region,
+        event.city,
+        event.device,
+        event.device_model,
+        event.os,
+        event.browser,
+        event.destination,
       ]),
     ];
     const csv = rows
-      .map((r: any[]) =>
-        r.map((x) => '"' + String(x).replaceAll('"', '""') + '"').join(","),
+      .map((row: any[]) =>
+        row
+          .map((value) =>
+            '"' + String(value).replaceAll('"', '""') + '"',
+          )
+          .join(","),
       )
       .join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = "routekit-clicks.csv";
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const anchor = document.createElement("a");
+    anchor.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    anchor.download = `waylo-clicks-${period}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(anchor.href);
   };
+
+  const timeline =
+    stats?.timeline ||
+    (stats?.daily || []).map((item) => ({ bucket: item.day, ...item }));
+  const total = stats?.summary.clicks || 0;
+  const pages = stats?.pagination?.pages || 1;
+  const periodLabel =
+    period === "day"
+      ? "Last 30 days"
+      : period === "week"
+        ? "Last 12 weeks"
+        : "Last 12 months";
+  const formatBucket = (value: string) => {
+    if (period === "week") return `W${value.split("W")[1] || value}`;
+    const date = new Date(
+      period === "month" ? `${value}-01T00:00:00Z` : `${value}T00:00:00Z`,
+    );
+    return Number.isNaN(date.getTime())
+      ? value
+      : date.toLocaleDateString(undefined, {
+          month: "short",
+          ...(period === "day" ? { day: "numeric" } : {}),
+          timeZone: "UTC",
+        });
+  };
+  const metricRow = (
+    key: string,
+    icon: React.ReactNode,
+    label: React.ReactNode,
+    meta: React.ReactNode,
+    clicks: number,
+  ) => (
+    <div className="metricrow" key={key}>
+      <span className="metricicon">{icon}</span>
+      <span className="metriclabel">
+        <b>{label}</b>
+        <small>{meta}</small>
+      </span>
+      <span className="metricvalue">
+        <b>{clicks.toLocaleString()}</b>
+        <small>{total ? Math.round((clicks / total) * 100) : 0}%</small>
+      </span>
+      <i>
+        <em style={{ width: `${total ? (clicks / total) * 100 : 0}%` }} />
+      </i>
+    </div>
+  );
+  const countryRows = (stats?.countries || []).map((item) =>
+    metricRow(
+      item.country,
+      <span className="flag">{flagFor(item.country)}</span>,
+      countryName(item.country),
+      `${item.unique_visitors || 0} unique`,
+      item.clicks,
+    ),
+  );
+  const deviceRows = (stats?.devices || []).map((item) =>
+    metricRow(
+      `${item.device}-${item.os}`,
+      <DeviceIcon device={item.device} os={item.os} />,
+      `${item.device} · ${item.os}`,
+      `${item.unique_visitors} unique`,
+      item.clicks,
+    ),
+  );
+  const linkRows = (stats?.links || []).map((item) => {
+    const link = data.links.find((candidate) => candidate.id === item.link_id);
+    return metricRow(
+      item.link_id,
+      <Link2 size={18} />,
+      link?.name || "Deleted link",
+      link ? `${link.domain}/${link.slug}` : item.link_id,
+      item.clicks,
+    );
+  });
+
   return (
     <section className="content">
       <div className="pagebar">
         <div>
-          <h2>Click log</h2>
-          <p>Only real events registered by the redirect endpoint.</p>
+          <h2>Analytics</h2>
+          <p>Traffic, audience and link performance from real redirect events.</p>
         </div>
-        <button onClick={exportCsv}>Export CSV</button>
+        <button onClick={() => void exportCsv()}>Export filtered CSV</button>
       </div>
+      <div className="analyticsbar card">
+        <div className="segment" aria-label="Analytics period">
+          {(["day", "week", "month"] as AnalyticsPeriod[]).map((item) => (
+            <button
+              key={item}
+              className={period === item ? "active" : ""}
+              onClick={() => {
+                setPeriod(item);
+                setPage(1);
+              }}
+            >
+              {item === "day"
+                ? "Days · 30"
+                : item === "week"
+                  ? "Weeks · 12"
+                  : "Months · 12"}
+            </button>
+          ))}
+        </div>
+        <label>
+          <span>Smart link</span>
+          <select
+            value={linkId}
+            onChange={(event) => {
+              setLinkId(event.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">All links</option>
+            {data.links.map((link) => (
+              <option key={link.id} value={link.id}>
+                {link.name} · /{link.slug}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="analyticsnav">
+        {(
+          [
+            ["overview", "Overview"],
+            ["geo", "Geography"],
+            ["devices", "Devices & OS"],
+            ["links", "Links"],
+          ] as [AnalyticsView, string][]
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            className={view === id ? "active" : ""}
+            onClick={() => setView(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {error && <div className="analyticserror">{error}</div>}
       <div className="stats">
         <Stat
           icon={MousePointer2}
-          label="Recorded clicks · 30 days"
-          value={(analytics?.summary.clicks || 0).toLocaleString()}
+          label={`Recorded clicks · ${periodLabel.toLowerCase()}`}
+          value={(stats?.summary.clicks || 0).toLocaleString()}
         />
         <Stat
           icon={Users}
-          label="Unique visitors · 30 days"
-          value={(analytics?.summary.unique_visitors || 0).toLocaleString()}
+          label={`Unique visitors · ${periodLabel.toLowerCase()}`}
+          value={(stats?.summary.unique_visitors || 0).toLocaleString()}
         />
         <Stat
           icon={Globe2}
           label="Countries observed"
-          value={(analytics?.summary.countries || 0).toLocaleString()}
+          value={(stats?.summary.countries || 0).toLocaleString()}
         />
         <Stat
           icon={Link2}
-          label="Traffic sources"
-          value={(analytics?.sources.length || 0).toLocaleString()}
+          label="Links with traffic"
+          value={(stats?.summary.links || 0).toLocaleString()}
         />
       </div>
-      <div className="card chartcard">
+      <div
+        className={`card chartcard analyticschart ${loading ? "loadingdata" : ""}`}
+      >
         <CardTitle
           title="Click activity"
-          sub="Clicks and unique visitors by UTC day"
-          action="Last 30 days"
+          sub={`Clicks and unique visitors grouped by ${period}`}
+          action={periodLabel}
         />
-        <ResponsiveContainer width="100%" height={280}>
-          <AreaChart data={analytics?.daily || []}>
-            <CartesianGrid stroke="#ececf2" vertical={false} />
-            <XAxis dataKey="day" />
-            <YAxis allowDecimals={false} />
-            <Tooltip />
-            <Area
+        <ResponsiveContainer width="100%" height={320}>
+          <LineChart
+            data={timeline}
+            margin={{ top: 12, right: 18, bottom: 4, left: -8 }}
+          >
+            <CartesianGrid
+              stroke="#ececf2"
+              strokeDasharray="4 6"
+              vertical={false}
+            />
+            <XAxis
+              dataKey="bucket"
+              tickFormatter={formatBucket}
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: "#8f8f9c", fontSize: 10 }}
+            />
+            <YAxis
+              allowDecimals={false}
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: "#8f8f9c", fontSize: 10 }}
+            />
+            <Tooltip
+              labelFormatter={formatBucket}
+              contentStyle={{
+                borderRadius: 12,
+                border: "1px solid #e3e0f2",
+                boxShadow: "0 12px 35px #28243f18",
+              }}
+            />
+            <Legend iconType="circle" iconSize={8} />
+            <Line
               type="monotone"
               dataKey="clicks"
+              name="Clicks"
               stroke="#7357ff"
               strokeWidth={3}
-              fill="#eeeaff"
+              dot={false}
+              activeDot={{
+                r: 5,
+                fill: "#7357ff",
+                stroke: "#fff",
+                strokeWidth: 3,
+              }}
             />
-            <Area
+            <Line
               type="monotone"
               dataKey="unique_visitors"
+              name="Unique visitors"
               stroke="#27a879"
-              strokeWidth={2}
-              fill="transparent"
+              strokeWidth={3}
+              dot={false}
+              activeDot={{
+                r: 5,
+                fill: "#27a879",
+                stroke: "#fff",
+                strokeWidth: 3,
+              }}
             />
-          </AreaChart>
+          </LineChart>
         </ResponsiveContainer>
       </div>
+      {view === "overview" && (
+        <div className="analyticsgrid">
+          <div className="card breakdown">
+            <CardTitle title="Top geography" sub="Countries by clicks" action={`${stats?.countries.length || 0} countries`} />
+            {countryRows.slice(0, 5)}
+            {!countryRows.length && <div className="emptymini">No geography data</div>}
+          </div>
+          <div className="card breakdown">
+            <CardTitle title="Devices & OS" sub="Audience technology" action={`${stats?.devices?.length || 0} groups`} />
+            {deviceRows.slice(0, 5)}
+            {!deviceRows.length && <div className="emptymini">No device data</div>}
+          </div>
+          <div className="card breakdown">
+            <CardTitle title="Link performance" sub="Traffic by smart link" action={`${stats?.links?.length || 0} links`} />
+            {linkRows.slice(0, 5)}
+            {!linkRows.length && <div className="emptymini">No link data</div>}
+          </div>
+        </div>
+      )}
+      {view === "geo" && (
+        <div className="card breakdown breakdownwide">
+          <CardTitle title="Geography" sub="Country-level traffic and unique visitors" action={`${stats?.countries.length || 0} countries`} />
+          {countryRows.length ? countryRows : <div className="emptymini">No geography data</div>}
+        </div>
+      )}
+      {view === "devices" && (
+        <div className="card breakdown breakdownwide">
+          <CardTitle title="Devices & operating systems" sub="Desktop, mobile, Android and iOS traffic" action={`${stats?.devices?.length || 0} groups`} />
+          {deviceRows.length ? deviceRows : <div className="emptymini">No device data</div>}
+        </div>
+      )}
+      {view === "links" && (
+        <div className="card breakdown breakdownwide">
+          <CardTitle title="Link performance" sub="Select a link above to isolate its analytics" action={`${stats?.links?.length || 0} links`} />
+          {linkRows.length ? linkRows : <div className="emptymini">No link traffic</div>}
+        </div>
+      )}
       <div className="tabletools">
         <div>
           <h3>All visits</h3>
-          <span>{visible.events.length} shown</span>
+          <span>{stats?.pagination?.total || 0} matching events</span>
         </div>
         <input
-          placeholder="Filter by source, GEO, OS, model or link…"
+          placeholder="Filter by source, GEO, OS, model or destination…"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(event) => setQuery(event.target.value)}
         />
       </div>
-      <RecentClicks analytics={visible} links={data.links} />
+      <RecentClicks analytics={stats} links={data.links} />
+      <div className="pagination">
+        <button
+          disabled={page <= 1 || loading}
+          onClick={() => setPage((value) => Math.max(1, value - 1))}
+        >
+          <ChevronLeft size={16} /> Previous
+        </button>
+        <span>
+          Page <b>{page}</b> of <b>{pages}</b>
+        </span>
+        <button
+          disabled={page >= pages || loading}
+          onClick={() => setPage((value) => Math.min(pages, value + 1))}
+        >
+          Next <ChevronRight size={16} />
+        </button>
+      </div>
       <div className="privacy">
         <ShieldCheck />
         <span>
@@ -1157,21 +1496,25 @@ function RecentClicks({
                   <b>{e.source}</b>
                   <small title={e.referrer}>{e.referrer}</small>
                 </td>
-                <td>
-                  <b>
-                    {[e.city, e.region]
-                      .filter((x) => x && x !== "Unknown")
-                      .join(", ") || e.country}
-                  </b>
-                  <small>{e.country}</small>
+                <td className="iconcell">
+                  <span className="tableicon flag">{flagFor(e.country)}</span>
+                  <span>
+                    <b>
+                      {[e.city, e.region]
+                        .filter((x) => x && x !== "Unknown")
+                        .join(", ") || countryName(e.country)}
+                    </b>
+                    <small>{countryName(e.country)}</small>
+                  </span>
                 </td>
-                <td>
-                  <b>
-                    {e.device} · {e.os}
-                  </b>
-                  <small>
-                    {e.device_model} · {e.browser}
-                  </small>
+                <td className="iconcell">
+                  <span className="tableicon">
+                    <DeviceIcon device={e.device} os={e.os} />
+                  </span>
+                  <span>
+                    <b>{e.device} · {e.os}</b>
+                    <small>{e.device_model} · {e.browser}</small>
+                  </span>
                 </td>
                 <td>
                   <b className="destination" title={e.destination}>
