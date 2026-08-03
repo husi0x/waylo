@@ -337,15 +337,19 @@ function Sidebar({
   );
 }
 function Top({ tab }: { tab: string }) {
+  const descriptions: Record<string, string> = {
+    Overview: "Live performance across links, domains and visitors.",
+    "Smart links": "Create destinations and control routing from one place.",
+    Domains: "Connect, verify and monitor every traffic domain.",
+    "Page builder": "Shape the public profile and preview every change.",
+    Analytics: "Explore first-party traffic by period, audience and link.",
+    Settings: "Workspace preferences, retention and access status.",
+  };
   return (
     <header>
       <div>
         <h1>{tab}</h1>
-        <p>
-          {tab === "Overview"
-            ? "Monitor and optimize every click in real time."
-            : "Manage your traffic workspace."}
-        </p>
+        <p>{descriptions[tab] || "Manage your traffic workspace."}</p>
       </div>
       <div className="topactions">
         <button className="icon">
@@ -367,7 +371,7 @@ function Overview({
 }) {
   const a = analytics;
   return (
-    <section className="content">
+    <section className="content overview-workspace">
       <div className="notice">
         <div>
           <ShieldCheck />
@@ -489,7 +493,7 @@ function Links({ data, onAdd, onEdit, refresh, notify }: any) {
     notify("Link removed");
   };
   return (
-    <section className="content">
+    <section className="content links-workspace">
       <div className="pagebar">
         <div>
           <h2>Smart links</h2>
@@ -500,7 +504,21 @@ function Links({ data, onAdd, onEdit, refresh, notify }: any) {
           New smart link
         </button>
       </div>
-      <div className="card">
+      <div className="workspacefacts" aria-label="Link summary">
+        <div>
+          <span>Active links</span>
+          <b>{data.links.filter((link: Link) => link.status === "active").length}</b>
+        </div>
+        <div>
+          <span>Total clicks</span>
+          <b>{data.links.reduce((sum: number, link: Link) => sum + link.clicks, 0).toLocaleString()}</b>
+        </div>
+        <div>
+          <span>Routing rules</span>
+          <b>{data.links.reduce((sum: number, link: Link) => sum + (link.rules || 0), 0)}</b>
+        </div>
+      </div>
+      <div className="card workspace-table-card">
         <table>
           <thead>
             <tr>
@@ -726,11 +744,25 @@ function Domains({ data, refresh, notify }: any) {
     notify("Domain deleted");
   };
   return (
-    <section className="content">
+    <section className="content domains-workspace">
       <div className="pagebar">
         <div>
           <h2>Domains</h2>
           <p>Add a domain, publish its DNS records, then verify ownership.</p>
+        </div>
+      </div>
+      <div className="workspacefacts" aria-label="Domain summary">
+        <div>
+          <span>Connected</span>
+          <b>{data.domains.length}</b>
+        </div>
+        <div>
+          <span>Verified</span>
+          <b>{data.domains.filter((domain: Domain) => domain.status === "active").length}</b>
+        </div>
+        <div>
+          <span>Awaiting DNS</span>
+          <b>{data.domains.filter((domain: Domain) => domain.status !== "active").length}</b>
         </div>
       </div>
       <div className="domainlayout">
@@ -859,7 +891,7 @@ function Builder({ data, setData, notify }: any) {
     notify("Page published");
   };
   return (
-    <section className="builder">
+    <section className="builder builder-workspace">
       <div className="editor">
         <div className="pagebar">
           <div>
@@ -870,6 +902,20 @@ function Builder({ data, setData, notify }: any) {
             <Save size={17} />
             Publish
           </button>
+        </div>
+        <div className="workspacefacts builderfacts" aria-label="Page summary">
+          <div>
+            <span>Public path</span>
+            <b>/p/{p.slug || "—"}</b>
+          </div>
+          <div>
+            <span>Link blocks</span>
+            <b>{p.blocks.length}</b>
+          </div>
+          <div>
+            <span>Status</span>
+            <b>Ready to publish</b>
+          </div>
         </div>
         <div className="card form">
           <label>
@@ -1529,30 +1575,76 @@ function RecentClicks({
 }
 function SettingsPage() {
   return (
-    <section className="content">
-      <div className="card form settings">
-        <h2>Workspace settings</h2>
-        <label>
-          Workspace name
-          <input defaultValue="Northstar Studio" />
-        </label>
-        <label>
-          Timezone
-          <select defaultValue="Europe/Berlin">
-            <option>Europe/Berlin</option>
-            <option>Europe/Samara</option>
-            <option>UTC</option>
-          </select>
-        </label>
-        <label>
-          Data retention
-          <select defaultValue="90">
-            <option value="30">30 days</option>
-            <option value="90">90 days</option>
-            <option value="365">1 year</option>
-          </select>
-        </label>
-        <button className="primary">Save changes</button>
+    <section className="content settings-workspace">
+      <div className="pagebar">
+        <div>
+          <h2>Workspace settings</h2>
+          <p>Keep the workspace identity and data policy in one clear place.</p>
+        </div>
+      </div>
+      <div className="workspacefacts" aria-label="Workspace status">
+        <div>
+          <span>Admin session</span>
+          <b>Protected</b>
+        </div>
+        <div>
+          <span>Analytics</span>
+          <b>First-party</b>
+        </div>
+        <div>
+          <span>Default retention</span>
+          <b>90 days</b>
+        </div>
+      </div>
+      <div className="settingslayout">
+        <div className="card form settings">
+          <div className="settingsheading">
+            <span className="metricicon"><Settings size={18} /></span>
+            <span>
+              <h3>General preferences</h3>
+              <p>Names, reporting timezone and event retention.</p>
+            </span>
+          </div>
+          <label>
+            Workspace name
+            <input defaultValue="Northstar Studio" />
+          </label>
+          <label>
+            Timezone
+            <select defaultValue="Europe/Berlin">
+              <option>Europe/Berlin</option>
+              <option>Europe/Samara</option>
+              <option>UTC</option>
+            </select>
+          </label>
+          <label>
+            Data retention
+            <select defaultValue="90">
+              <option value="30">30 days</option>
+              <option value="90">90 days</option>
+              <option value="365">1 year</option>
+            </select>
+          </label>
+          <button className="primary" type="button"><Save size={16} /> Save changes</button>
+        </div>
+        <div className="card settingsstatus">
+          <CardTitle title="Workspace health" sub="Current protection and storage state" action="All systems normal" />
+          <div className="statusrow">
+            <span className="metricicon"><ShieldCheck size={17} /></span>
+            <span><b>Secure administrator access</b><small>Protected by the configured workspace password.</small></span>
+            <em>Active</em>
+          </div>
+          <div className="statusrow">
+            <span className="metricicon"><Activity size={17} /></span>
+            <span><b>Local event storage</b><small>Redirect events stay in the workspace SQLite database.</small></span>
+            <em>Connected</em>
+          </div>
+          <div className="statusrow">
+            <span className="metricicon"><BarChart3 size={17} /></span>
+            <span><b>First-party reporting</b><small>No external analytics script is required.</small></span>
+            <em>Enabled</em>
+          </div>
+        </div>
       </div>
     </section>
   );
