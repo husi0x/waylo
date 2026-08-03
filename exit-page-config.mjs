@@ -4,8 +4,8 @@ export const EXIT_PAGE_DEFAULTS = Object.freeze({
   countdown: 3,
   subtext: 'This content is intended for adults aged 18 and older. By continuing, you confirm that you are at least 18 years old.',
   button: 'Continue (18+)',
-  copyLabel: 'Copy link',
-  directLabel: 'Open directly',
+  customLabel: '',
+  customUrl: '',
 });
 
 export function normalizeCountdown(value) {
@@ -27,6 +27,11 @@ export function textOrDefault(value, fallback, maxLength) {
   return text || fallback;
 }
 
+export function textOrEmpty(value, maxLength) {
+  if (typeof value !== 'string') return '';
+  return value.trim().slice(0, maxLength);
+}
+
 export function withExitPageDefaults(value = {}) {
   return {
     mode: value.landingMode === 'app' ? 'app' : EXIT_PAGE_DEFAULTS.mode,
@@ -34,8 +39,8 @@ export function withExitPageDefaults(value = {}) {
     countdown: normalizeCountdown(value.landingCountdown),
     subtext: textOrDefault(value.landingSubtext, EXIT_PAGE_DEFAULTS.subtext, 220),
     button: textOrDefault(value.landingButton, EXIT_PAGE_DEFAULTS.button, 40),
-    copyLabel: textOrDefault(value.landingCopy, EXIT_PAGE_DEFAULTS.copyLabel, 40),
-    directLabel: textOrDefault(value.landingDirect, EXIT_PAGE_DEFAULTS.directLabel, 40),
+    customLabel: textOrEmpty(value.landingCustomLabel, 40),
+    customUrl: textOrEmpty(value.landingCustomUrl, 500),
   };
 }
 
@@ -52,8 +57,8 @@ export function normalizeLandingFields(body = {}) {
     landingHeading: on ? defaults.heading : '',
     landingSubtext: on ? defaults.subtext : '',
     landingButton: on ? defaults.button : '',
-    landingCopy: on ? defaults.copyLabel : '',
-    landingDirect: on ? defaults.directLabel : '',
+    landingCustomLabel: on ? defaults.customLabel : '',
+    landingCustomUrl: on ? defaults.customUrl : '',
     landingCountdown: on ? defaults.countdown : EXIT_PAGE_DEFAULTS.countdown,
   };
 }
@@ -69,15 +74,14 @@ export const EXIT_PAGE_CSS = String.raw`
 .exit-page-primary{width:100%;min-height:55px;margin-top:28px;padding:14px 18px;border:1px solid #f3f3f4;border-radius:15px;background:#f3f3f4;color:#111113;font:inherit;font-size:16px;font-weight:700;line-height:1.2;text-decoration:none;display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color .14s ease,border-color .14s ease,transform .1s ease}
 @media (hover:hover) and (pointer:fine){.exit-page-primary:hover{background:#fff;border-color:#fff}}
 .exit-page-primary:active{transform:scale(.985);background:#e7e7e9;border-color:#e7e7e9}
-.exit-page-primary:focus-visible,.exit-page-copy:focus-visible,.exit-page-direct:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.exit-page-primary:focus-visible,.exit-page-custom:focus-visible{outline:2px solid #fff;outline-offset:3px}
 .exit-page-primary[aria-disabled="true"]{cursor:wait}
 .exit-page-status{min-height:18px;margin:13px 0 0;color:#69696f;font-size:12.5px;line-height:1.4;font-variant-numeric:tabular-nums}
-.exit-page-fallback{width:100%;margin-top:14px;display:grid;justify-items:center;gap:12px}
+.exit-page-fallback{width:100%;margin-top:14px;display:grid;justify-items:center}
 .exit-page-fallback[hidden]{display:none}
-.exit-page-copy{width:100%;min-height:44px;padding:10px 15px;border:1px solid rgba(255,255,255,.11);border-radius:13px;background:transparent;color:#b7b7bc;font:inherit;font-size:13px;font-weight:650;cursor:pointer;-webkit-tap-highlight-color:transparent}
-@media (hover:hover) and (pointer:fine){.exit-page-copy:hover{background:rgba(255,255,255,.035);border-color:rgba(255,255,255,.17)}}
-.exit-page-copy:active{background:rgba(255,255,255,.055)}
-.exit-page-direct{color:#77777d;font-size:12px;line-height:1.4;text-underline-offset:3px}
+.exit-page-custom{width:100%;min-height:44px;padding:10px 15px;border:1px solid rgba(255,255,255,.14);border-radius:13px;background:transparent;color:#d5d5d9;font:inherit;font-size:13px;font-weight:650;line-height:1.25;text-decoration:none;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
+@media (hover:hover) and (pointer:fine){.exit-page-custom:hover{background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.2)}}
+.exit-page-custom:active{background:rgba(255,255,255,.065)}
 @media (max-width:390px){.exit-page-shell{padding-left:20px;padding-right:20px}.exit-page-card{padding:34px 22px 29px}}
 @media (max-height:560px){.exit-page-shell{place-items:start center}.exit-page-card{margin:auto 0}}
 @media (prefers-reduced-motion:reduce){.exit-page-primary{transition:none}}

@@ -67,8 +67,8 @@ type Link = {
   landingHeading?: string;
   landingSubtext?: string;
   landingButton?: string;
-  landingCopy?: string;
-  landingDirect?: string;
+  landingCustomLabel?: string;
+  landingCustomUrl?: string;
   landingCountdown?: number;
   bulk?: boolean;
 };
@@ -438,7 +438,7 @@ function Overview({
             </div>
           )}
         </div>
-        <div className="card">
+        <div className="card sourcecard">
           <CardTitle
             title="Traffic sources"
             sub="UTM source or referrer host"
@@ -639,13 +639,13 @@ function RuleModal({
   return (
     <div className="overlay">
       <form className="modal" onSubmit={submit}>
-        <div>
+        <div className="modalheader">
           <span>
             <h2>Smart routing rule</h2>
             <p>{link.name} · rules are evaluated from top to bottom.</p>
           </span>
-          <button type="button" className="icon" onClick={close}>
-            <X />
+          <button type="button" className="icon modalclose" onClick={close} aria-label="Close modal">
+            <X size={17} />
           </button>
         </div>
         <div className="rulegrid">
@@ -1637,10 +1637,11 @@ function LinkModal({
   const [landingHeading, setLandingHeading] = useState(exitPage.heading);
   const [landingSubtext, setLandingSubtext] = useState(exitPage.subtext);
   const [landingButton, setLandingButton] = useState(exitPage.button);
-  const [landingCopy, setLandingCopy] = useState(exitPage.copyLabel);
-  const [landingDirect, setLandingDirect] = useState(exitPage.directLabel);
+  const [landingCustomLabel, setLandingCustomLabel] = useState(exitPage.customLabel);
+  const [landingCustomUrl, setLandingCustomUrl] = useState(exitPage.customUrl);
   const [landingCountdown, setLandingCountdown] = useState(String(exitPage.countdown));
   const [countdownError, setCountdownError] = useState("");
+  const [customButtonError, setCustomButtonError] = useState("");
   const available = domains.filter((d) => d.status === "active");
   const [bulk, setBulk] = useState(false);
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -1659,14 +1660,30 @@ function LinkModal({
         setCountdownError(`Auto-redirect must be at least ${EXIT_PAGE_DEFAULTS.countdown} seconds.`);
         return;
       }
+      const customLabel = landingCustomLabel.trim();
+      const customUrl = landingCustomUrl.trim();
+      if (Boolean(customLabel) !== Boolean(customUrl)) {
+        setCustomButtonError("Enter both a button name and an HTTPS link, or leave both empty.");
+        return;
+      }
+      if (customUrl) {
+        try {
+          const parsed = new URL(customUrl);
+          if (parsed.protocol !== "https:") throw new Error("invalid protocol");
+        } catch {
+          setCustomButtonError("Custom button link must be a valid HTTPS URL.");
+          return;
+        }
+      }
+      setCustomButtonError("");
       body.landing = true;
       body.landingMode = mode;
       if (mode === "app") body.landingScheme = f.get("landingScheme") || "";
       body.landingHeading = landingHeading;
       body.landingSubtext = landingSubtext;
       body.landingButton = landingButton;
-      body.landingCopy = landingCopy;
-      body.landingDirect = landingDirect;
+      body.landingCustomLabel = customLabel;
+      body.landingCustomUrl = customUrl;
       body.landingCountdown = normalizeCountdown(landingCountdown);
     } else {
       body.landing = false;
@@ -1707,7 +1724,7 @@ function LinkModal({
       onMouseDown={(e) => e.target === e.currentTarget && close()}
     >
       <form className="modal wide" onSubmit={submit}>
-        <div>
+        <div className="modalheader">
           <span>
             <h2>{isEdit ? "Edit smart link" : "Create smart link"}</h2>
             <p>
@@ -1716,8 +1733,8 @@ function LinkModal({
                 : "Choose exactly which connected domain will serve this link."}
             </p>
           </span>
-          <button type="button" className="icon" onClick={close}>
-            <X />
+          <button type="button" className="icon modalclose" onClick={close} aria-label="Close modal">
+            <X size={17} />
           </button>
         </div>
         <label>
@@ -1891,44 +1908,60 @@ function LinkModal({
                   maxLength={220}
                 />
               </label>
-              <div className="fieldrow2">
-                <label>
-                  Button label
-                  <input
-                    name="landingButton"
-                    value={landingButton}
-                    onChange={(e) => setLandingButton(e.target.value)}
-                    placeholder={EXIT_PAGE_DEFAULTS.button}
-                    maxLength={40}
-                  />
-                </label>
-                <label>
-                  Copy button label
-                  <input
-                    name="landingCopy"
-                    value={landingCopy}
-                    onChange={(e) => setLandingCopy(e.target.value)}
-                    placeholder={EXIT_PAGE_DEFAULTS.copyLabel}
-                    maxLength={40}
-                  />
-                </label>
-              </div>
               <label>
-                Direct link label
+                Primary button label
                 <input
-                  name="landingDirect"
-                  value={landingDirect}
-                  onChange={(e) => setLandingDirect(e.target.value)}
-                  placeholder={EXIT_PAGE_DEFAULTS.directLabel}
+                  name="landingButton"
+                  value={landingButton}
+                  onChange={(e) => setLandingButton(e.target.value)}
+                  placeholder={EXIT_PAGE_DEFAULTS.button}
                   maxLength={40}
                 />
               </label>
+              <div className="customactionfields">
+                <div className="customactiontitle">
+                  <b>Custom fallback button</b>
+                  <small>Optional. Shown if the automatic handoff does not open.</small>
+                </div>
+                <div className="fieldrow2">
+                  <label>
+                    Button name
+                    <input
+                      name="landingCustomLabel"
+                      value={landingCustomLabel}
+                      onChange={(e) => {
+                        setLandingCustomLabel(e.target.value);
+                        setCustomButtonError("");
+                      }}
+                      placeholder="Contact support"
+                      maxLength={40}
+                      required={Boolean(landingCustomUrl.trim())}
+                    />
+                  </label>
+                  <label>
+                    Button link
+                    <input
+                      name="landingCustomUrl"
+                      type="url"
+                      value={landingCustomUrl}
+                      onChange={(e) => {
+                        setLandingCustomUrl(e.target.value);
+                        setCustomButtonError("");
+                      }}
+                      placeholder="https://example.com/support"
+                      maxLength={500}
+                      required={Boolean(landingCustomLabel.trim())}
+                    />
+                  </label>
+                </div>
+                {customButtonError && <span className="field-error">{customButtonError}</span>}
+              </div>
               <ExitPagePreview
                 heading={landingHeading}
                 subtext={landingSubtext}
                 button={landingButton}
-                copyLabel={landingCopy}
-                directLabel={landingDirect}
+                customLabel={landingCustomLabel}
+                customUrl={landingCustomUrl}
                 countdown={landingCountdown}
               />
             </div>

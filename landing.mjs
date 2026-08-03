@@ -24,20 +24,26 @@ export function renderLanding(cfg = {}) {
     heading: textOrDefault(cfg.heading, EXIT_PAGE_DEFAULTS.heading, 80),
     subtext: textOrDefault(cfg.subtext, EXIT_PAGE_DEFAULTS.subtext, 220),
     button: textOrDefault(cfg.button, EXIT_PAGE_DEFAULTS.button, 40),
-    copyLabel: textOrDefault(cfg.copyLabel, EXIT_PAGE_DEFAULTS.copyLabel, 40),
-    directLabel: textOrDefault(cfg.directLabel, EXIT_PAGE_DEFAULTS.directLabel, 40),
+    customLabel: typeof cfg.customLabel === 'string' ? cfg.customLabel.trim().slice(0, 40) : '',
+    customUrl: typeof cfg.customUrl === 'string' ? cfg.customUrl.trim().slice(0, 500) : '',
   };
   const primary = typeof cfg.primary === 'string' ? cfg.primary : '';
   const destination = typeof cfg.destination === 'string' ? cfg.destination : '';
   const fallback = typeof cfg.fallback === 'string' ? cfg.fallback : destination;
   const safe = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, esc(value)]));
+  const customAction = values.customLabel && values.customUrl
+    ? `<div class="exit-page-fallback" id="fallback-actions" hidden><a class="exit-page-custom" id="custom-action" href="${safe.customUrl}" rel="noopener noreferrer">${safe.customLabel}</a></div>`
+    : '';
+  const noscriptAction = values.customLabel && values.customUrl
+    ? `<noscript><p><a class="exit-page-custom" href="${safe.customUrl}" rel="noopener noreferrer">${safe.customLabel}</a></p></noscript>`
+    : '';
   const runtime = JSON.stringify({
     auto: cfg.auto !== false,
     countdown,
     primary,
     destination,
     fallback,
-    copyLabel: values.copyLabel,
+    hasCustomAction: Boolean(customAction),
   }).replace(/</g, '\\u003c');
   const seconds = countdown === 1 ? 'second' : 'seconds';
 
@@ -59,10 +65,7 @@ export function renderLanding(cfg = {}) {
     <p class="exit-page-subtext" id="exit-page-description">${safe.subtext}</p>
     <button class="exit-page-primary" id="continue" type="button">${safe.button}</button>
     <p class="exit-page-status" id="status" aria-live="polite">Opening automatically in ${countdown} ${seconds}…</p>
-    <div class="exit-page-fallback" id="fallback-actions" hidden>
-      <button class="exit-page-copy" id="copy" type="button">${safe.copyLabel}</button>
-      <a class="exit-page-direct" id="direct" href="${esc(destination)}" rel="noopener noreferrer">${safe.directLabel}</a>
-    </div>
+    ${customAction}
   </main>
 <script>
 (function(){
@@ -70,7 +73,6 @@ export function renderLanding(cfg = {}) {
   var continueButton = document.getElementById('continue');
   var status = document.getElementById('status');
   var fallbackActions = document.getElementById('fallback-actions');
-  var copyButton = document.getElementById('copy');
   var redirectTimer = null;
   var countdownTimer = null;
   var unlockTimer = null;
@@ -87,8 +89,10 @@ export function renderLanding(cfg = {}) {
   }
 
   function revealFallback(){
-    fallbackActions.hidden = false;
-    status.textContent = 'If nothing opened, try again or use an option below.';
+    if (fallbackActions) fallbackActions.hidden = false;
+    status.textContent = cfg.hasCustomAction
+      ? 'If nothing opened, try again or use the option below.'
+      : 'If nothing opened, tap Continue to try again.';
   }
 
   function attemptOpen(source){
@@ -115,33 +119,6 @@ export function renderLanding(cfg = {}) {
 
   continueButton.addEventListener('click', function(){ attemptOpen('manual'); });
 
-  function legacyCopy(){
-    var textarea = document.createElement('textarea');
-    textarea.value = cfg.destination;
-    textarea.setAttribute('readonly', '');
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
-    var copied = false;
-    try { copied = document.execCommand('copy'); } catch (error) {}
-    document.body.removeChild(textarea);
-    return copied;
-  }
-
-  function showCopied(){
-    copyButton.textContent = 'Copied';
-    setTimeout(function(){ copyButton.textContent = cfg.copyLabel; }, 1600);
-  }
-
-  copyButton.addEventListener('click', function(){
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(cfg.destination).then(showCopied, function(){
-        if (legacyCopy()) showCopied();
-      });
-    } else if (legacyCopy()) showCopied();
-  });
-
   if (cfg.auto) {
     updateCountdown();
     countdownTimer = setInterval(updateCountdown, 250);
@@ -161,7 +138,7 @@ export function renderLanding(cfg = {}) {
   }, {once:true});
 })();
 </script>
-<noscript><p><a href="${esc(destination)}" rel="noopener noreferrer">${safe.directLabel}</a></p></noscript>
+${noscriptAction}
 </body>
 </html>`;
 }

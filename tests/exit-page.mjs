@@ -14,8 +14,8 @@ assert.deepEqual(EXIT_PAGE_DEFAULTS, {
   countdown: 3,
   subtext: 'This content is intended for adults aged 18 and older. By continuing, you confirm that you are at least 18 years old.',
   button: 'Continue (18+)',
-  copyLabel: 'Copy link',
-  directLabel: 'Open directly',
+  customLabel: '',
+  customUrl: '',
 });
 
 for (const value of [undefined, null, '', 'bad', Number.NaN, Number.POSITIVE_INFINITY, -8, 0, 1, 2, 2.6]) {
@@ -30,8 +30,8 @@ assert.equal(fresh.landingMode, 'browser');
 assert.equal(fresh.landingHeading, EXIT_PAGE_DEFAULTS.heading);
 assert.equal(fresh.landingSubtext, EXIT_PAGE_DEFAULTS.subtext);
 assert.equal(fresh.landingButton, EXIT_PAGE_DEFAULTS.button);
-assert.equal(fresh.landingCopy, EXIT_PAGE_DEFAULTS.copyLabel);
-assert.equal(fresh.landingDirect, EXIT_PAGE_DEFAULTS.directLabel);
+assert.equal(fresh.landingCustomLabel, '');
+assert.equal(fresh.landingCustomUrl, '');
 assert.equal(fresh.landingCountdown, 3);
 
 const legacy = normalizeLandingFields({
@@ -41,13 +41,17 @@ const legacy = normalizeLandingFields({
   landingButton: 'Go now',
   landingCopy: 'Duplicate URL',
   landingDirect: 'Use browser',
+  landingCustomLabel: 'Contact support',
+  landingCustomUrl: 'https://example.com/support',
   landingCountdown: 1,
 });
 assert.equal(legacy.landingHeading, 'My heading');
 assert.equal(legacy.landingSubtext, 'My subtext');
 assert.equal(legacy.landingButton, 'Go now');
-assert.equal(legacy.landingCopy, 'Duplicate URL');
-assert.equal(legacy.landingDirect, 'Use browser');
+assert.equal(legacy.landingCustomLabel, 'Contact support');
+assert.equal(legacy.landingCustomUrl, 'https://example.com/support');
+assert.equal('landingCopy' in legacy, false);
+assert.equal('landingDirect' in legacy, false);
 assert.equal(legacy.landingCountdown, 3);
 
 const html = renderLanding({
@@ -59,13 +63,23 @@ assert.match(html, /Adults Only/);
 assert.match(html, /Continue \(18\+\)/);
 assert.match(html, /class="exit-age-icon"/);
 assert.match(html, /Opening automatically in 3 seconds/);
-assert.match(html, /id="fallback-actions"[^>]*hidden/);
-assert.match(html, /id="copy"/);
-assert.match(html, /id="direct"[^>]*rel="noopener noreferrer"/);
-assert.match(html, /id="direct" href="https:\/\/example\.com\/content"/);
+assert.doesNotMatch(html, /Copy link|Open directly|id="copy"|id="direct"|exit-page-copy|exit-page-direct/);
 assert.match(html, /function attemptOpen/);
 assert.match(html, /clearTimeout\(redirectTimer\)/);
 assert.doesNotMatch(html, /gradient|Powered by Waylo|class="avatar"|class="ring"/i);
+
+const customHtml = renderLanding({
+  primary: 'intent://example.com#Intent;scheme=https;end',
+  destination: 'https://example.com/content',
+  fallback: 'https://example.com/content?_inapp_escaped=1',
+  customLabel: 'Contact support',
+  customUrl: 'https://example.com/support',
+});
+assert.match(customHtml, /id="fallback-actions"[^>]*hidden/);
+assert.match(customHtml, /id="custom-action"/);
+assert.match(customHtml, /href="https:\/\/example\.com\/support"/);
+assert.match(customHtml, />Contact support<\/a>/);
+assert.doesNotMatch(customHtml, /Copy link|Open directly|id="copy"|id="direct"/);
 
 function createRuntime(renderedHtml) {
   const script = renderedHtml.match(/<script>([\s\S]*?)<\/script>/)[1];
@@ -86,7 +100,7 @@ function createRuntime(renderedHtml) {
       select() {},
     };
   };
-  for (const id of ['continue', 'status', 'fallback-actions', 'copy', 'direct']) elements.set(id, element(id));
+  for (const id of ['continue', 'status', 'fallback-actions', 'custom-action']) elements.set(id, element(id));
   const schedule = (callback, delay, repeat = false) => {
     const id = nextTimerId++;
     timers.set(id, {callback, delay, repeat});
@@ -114,7 +128,7 @@ function createRuntime(renderedHtml) {
   return {timers, cleared, targets, elements};
 }
 
-const manualRuntime = createRuntime(html);
+const manualRuntime = createRuntime(customHtml);
 const redirectEntry = [...manualRuntime.timers.entries()].find(([, timer]) => timer.delay === 3000 && !timer.repeat);
 assert.ok(redirectEntry, 'three-second redirect timer should be scheduled once');
 manualRuntime.elements.get('continue').listeners.get('click')();
@@ -123,7 +137,7 @@ assert.ok(manualRuntime.cleared.has(redirectEntry[0]), 'manual click should canc
 redirectEntry[1].callback();
 assert.equal(manualRuntime.targets.length, 1, 'simultaneous timer callback should be ignored while a manual attempt is active');
 
-const automaticRuntime = createRuntime(html);
+const automaticRuntime = createRuntime(customHtml);
 const automaticRedirect = [...automaticRuntime.timers.values()].find((timer) => timer.delay === 3000 && !timer.repeat);
 automaticRedirect.callback();
 assert.equal(automaticRuntime.targets.length, 1, 'automatic timer should start one transition');
@@ -132,8 +146,6 @@ const reveal = [...automaticRuntime.timers.values()].find((timer) => timer.delay
 unlock.callback();
 reveal.callback();
 assert.equal(automaticRuntime.elements.get('fallback-actions').hidden, false);
-automaticRuntime.elements.get('copy').listeners.get('click')();
-assert.equal(automaticRuntime.elements.get('copy').textContent, 'Copied', 'legacy clipboard fallback should confirm a successful copy');
 automaticRuntime.elements.get('continue').listeners.get('click')();
 assert.equal(automaticRuntime.targets.length, 2, 'manual retry should remain available after an automatic attempt');
 
@@ -201,15 +213,33 @@ try {
   assert.equal(invalid.status, 400);
   assert.match((await invalid.json()).error, /at least 3/);
 
+  const invalidCustom = await fetch(base + '/api/links', {
+    method: 'POST', headers,
+    body: JSON.stringify({name: 'Invalid custom', slug: 'invalid-custom', domain: 'links.test', destination: 'https://example.com', landing: true, landingCustomLabel: 'Support'}),
+  });
+  assert.equal(invalidCustom.status, 400);
+  assert.match((await invalidCustom.json()).error, /custom button/i);
+
+  const unsafeCustom = await fetch(base + '/api/links', {
+    method: 'POST', headers,
+    body: JSON.stringify({name: 'Unsafe custom', slug: 'unsafe-custom', domain: 'links.test', destination: 'https://example.com', landing: true, landingCustomLabel: 'Support', landingCustomUrl: 'http://example.com/support'}),
+  });
+  assert.equal(unsafeCustom.status, 400);
+  assert.match((await unsafeCustom.json()).error, /public HTTPS link/i);
+
   const created = await fetch(base + '/api/links', {
     method: 'POST', headers,
-    body: JSON.stringify({name: 'Fresh', slug: 'fresh', domain: 'links.test', destination: 'https://example.com', landing: true}),
+    body: JSON.stringify({name: 'Fresh', slug: 'fresh', domain: 'links.test', destination: 'https://example.com', landing: true, landingCustomLabel: 'Support', landingCustomUrl: 'https://example.com/support'}),
   });
   const createdText = await created.text();
   assert.equal(created.status, 201, createdText);
   const createdLink = JSON.parse(createdText);
   assert.equal(createdLink.landingHeading, EXIT_PAGE_DEFAULTS.heading);
   assert.equal(createdLink.landingCountdown, 3);
+  assert.equal(createdLink.landingCustomLabel, 'Support');
+  assert.equal(createdLink.landingCustomUrl, 'https://example.com/support');
+  assert.equal('landingCopy' in createdLink, false);
+  assert.equal('landingDirect' in createdLink, false);
 } finally {
   child.kill('SIGTERM');
   fs.rmSync(dataDir, {recursive: true, force: true});

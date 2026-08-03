@@ -4,8 +4,8 @@ type ExitPagePreviewProps = {
   heading: string;
   subtext: string;
   button: string;
-  copyLabel: string;
-  directLabel: string;
+  customLabel: string;
+  customUrl: string;
   countdown: unknown;
 };
 
@@ -34,14 +34,13 @@ export function ExitPagePreview(props: ExitPagePreviewProps) {
           <p className="exit-page-status">
             Opening automatically in {countdown} {countdown === 1 ? "second" : "seconds"}…
           </p>
-          <div className="exit-page-fallback">
-            <button className="exit-page-copy" type="button" onClick={(event) => event.preventDefault()}>
-              {textOrDefault(props.copyLabel, EXIT_PAGE_DEFAULTS.copyLabel, 40)}
-            </button>
-            <a className="exit-page-direct" href="#" onClick={(event) => event.preventDefault()}>
-              {textOrDefault(props.directLabel, EXIT_PAGE_DEFAULTS.directLabel, 40)}
-            </a>
-          </div>
+          {props.customLabel.trim() && props.customUrl.trim() ? (
+            <div className="exit-page-fallback">
+              <a className="exit-page-custom" href="#" onClick={(event) => event.preventDefault()}>
+                {props.customLabel.trim().slice(0, 40)}
+              </a>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
