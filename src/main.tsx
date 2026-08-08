@@ -624,6 +624,12 @@ const COUNTRIES: [string, string][] = [
   ["AF", "Afghanistan"],["AX", "Åland Islands"],["AL", "Albania"],["DZ", "Algeria"],["AS", "American Samoa"],["AD", "Andorra"],["AO", "Angola"],["AI", "Anguilla"],["AQ", "Antarctica"],["AG", "Antigua & Barbuda"],["AR", "Argentina"],["AM", "Armenia"],["AW", "Aruba"],["AU", "Australia"],["AT", "Austria"],["AZ", "Azerbaijan"],["BS", "Bahamas"],["BH", "Bahrain"],["BD", "Bangladesh"],["BB", "Barbados"],["BY", "Belarus"],["BE", "Belgium"],["BZ", "Belize"],["BJ", "Benin"],["BM", "Bermuda"],["BT", "Bhutan"],["BO", "Bolivia"],["BQ", "Caribbean Netherlands"],["BA", "Bosnia & Herzegovina"],["BW", "Botswana"],["BV", "Bouvet Island"],["BR", "Brazil"],["IO", "British Indian Ocean Territory"],["BN", "Brunei"],["BG", "Bulgaria"],["BF", "Burkina Faso"],["BI", "Burundi"],["KH", "Cambodia"],["CM", "Cameroon"],["CA", "Canada"],["CV", "Cape Verde"],["KY", "Cayman Islands"],["CF", "Central African Republic"],["TD", "Chad"],["CL", "Chile"],["CN", "China"],["CX", "Christmas Island"],["CC", "Cocos (Keeling) Islands"],["CO", "Colombia"],["KM", "Comoros"],["CG", "Congo - Brazzaville"],["CD", "Congo - Kinshasa"],["CK", "Cook Islands"],["CR", "Costa Rica"],["CI", "Côte d'Ivoire"],["HR", "Croatia"],["CU", "Cuba"],["CW", "Curaçao"],["CY", "Cyprus"],["CZ", "Czechia"],["DK", "Denmark"],["DJ", "Djibouti"],["DM", "Dominica"],["DO", "Dominican Republic"],["EC", "Ecuador"],["EG", "Egypt"],["SV", "El Salvador"],["GQ", "Equatorial Guinea"],["ER", "Eritrea"],["EE", "Estonia"],["SZ", "Eswatini"],["ET", "Ethiopia"],["FK", "Falkland Islands"],["FO", "Faroe Islands"],["FJ", "Fiji"],["FI", "Finland"],["FR", "France"],["GF", "French Guiana"],["PF", "French Polynesia"],["TF", "French Southern Territories"],["GA", "Gabon"],["GM", "Gambia"],["GE", "Georgia"],["DE", "Germany"],["GH", "Ghana"],["GI", "Gibraltar"],["GR", "Greece"],["GL", "Greenland"],["GD", "Grenada"],["GP", "Guadeloupe"],["GU", "Guam"],["GT", "Guatemala"],["GG", "Guernsey"],["GN", "Guinea"],["GW", "Guinea-Bissau"],["GY", "Guyana"],["HT", "Haiti"],["HM", "Heard & McDonald Islands"],["VA", "Vatican City"],["HN", "Honduras"],["HK", "Hong Kong"],["HU", "Hungary"],["IS", "Iceland"],["IN", "India"],["ID", "Indonesia"],["IR", "Iran"],["IQ", "Iraq"],["IE", "Ireland"],["IM", "Isle of Man"],["IL", "Israel"],["IT", "Italy"],["JM", "Jamaica"],["JP", "Japan"],["JE", "Jersey"],["JO", "Jordan"],["KZ", "Kazakhstan"],["KE", "Kenya"],["KI", "Kiribati"],["KP", "North Korea"],["KR", "South Korea"],["KW", "Kuwait"],["KG", "Kyrgyzstan"],["LA", "Laos"],["LV", "Latvia"],["LB", "Lebanon"],["LS", "Lesotho"],["LR", "Liberia"],["LY", "Libya"],["LI", "Liechtenstein"],["LT", "Lithuania"],["LU", "Luxembourg"],["MO", "Macao"],["MG", "Madagascar"],["MW", "Malawi"],["MY", "Malaysia"],["MV", "Maldives"],["ML", "Mali"],["MT", "Malta"],["MH", "Marshall Islands"],["MQ", "Martinique"],["MR", "Mauritania"],["MU", "Mauritius"],["YT", "Mayotte"],["MX", "Mexico"],["FM", "Micronesia"],["MD", "Moldova"],["MC", "Monaco"],["MN", "Mongolia"],["ME", "Montenegro"],["MS", "Montserrat"],["MA", "Morocco"],["MZ", "Mozambique"],["MM", "Myanmar (Burma)"],["NA", "Namibia"],["NR", "Nauru"],["NP", "Nepal"],["NL", "Netherlands"],["NC", "New Caledonia"],["NZ", "New Zealand"],["NI", "Nicaragua"],["NE", "Niger"],["NG", "Nigeria"],["NU", "Niue"],["NF", "Norfolk Island"],["MK", "North Macedonia"],["MP", "Northern Mariana Islands"],["NO", "Norway"],["OM", "Oman"],["PK", "Pakistan"],["PW", "Palau"],["PS", "Palestine"],["PA", "Panama"],["PG", "Papua New Guinea"],["PY", "Paraguay"],["PE", "Peru"],["PH", "Philippines"],["PN", "Pitcairn Islands"],["PL", "Poland"],["PT", "Portugal"],["PR", "Puerto Rico"],["QA", "Qatar"],["RE", "Réunion"],["RO", "Romania"],["RU", "Russia"],["RW", "Rwanda"],["WS", "Samoa"],["SM", "San Marino"],["ST", "São Tomé & Príncipe"],["SA", "Saudi Arabia"],["SN", "Senegal"],["RS", "Serbia"],["SC", "Seychelles"],["SL", "Sierra Leone"],["SG", "Singapore"],["SX", "Sint Maarten"],["SK", "Slovakia"],["SI", "Slovenia"],["SB", "Solomon Islands"],["SO", "Somalia"],["ZA", "South Africa"],["GS", "South Georgia & South Sandwich Islands"],["SS", "South Sudan"],["ES", "Spain"],["LK", "Sri Lanka"],["BL", "St. Barthélemy"],["SH", "St. Helena"],["KN", "St. Kitts & Nevis"],["LC", "St. Lucia"],["MF", "St. Martin"],["PM", "St. Pierre & Miquelon"],["VC", "St. Vincent & Grenadines"],["SD", "Sudan"],["SR", "Suriname"],["SJ", "Svalbard & Jan Mayen"],["SE", "Sweden"],["CH", "Switzerland"],["SY", "Syria"],["TW", "Taiwan"],["TJ", "Tajikistan"],["TZ", "Tanzania"],["TH", "Thailand"],["TL", "Timor-Leste"],["TG", "Togo"],["TK", "Tokelau"],["TO", "Tonga"],["TT", "Trinidad & Tobago"],["TN", "Tunisia"],["TR", "Türkiye"],["TM", "Turkmenistan"],["TC", "Turks & Caicos Islands"],["TV", "Tuvalu"],["UG", "Uganda"],["UA", "Ukraine"],["AE", "United Arab Emirates"],["GB", "United Kingdom"],["US", "United States"],["UM", "U.S. Outlying Islands"],["UY", "Uruguay"],["UZ", "Uzbekistan"],["VU", "Vanuatu"],["VE", "Venezuela"],["VN", "Vietnam"],["VG", "British Virgin Islands"],["VI", "U.S. Virgin Islands"],["WF", "Wallis & Futuna"],["EH", "Western Sahara"],["YE", "Yemen"],["ZM", "Zambia"],["ZW", "Zimbabwe"],
 ];
 const countryName = (code: string) => COUNTRIES.find(([c]) => c === code)?.[1] || code;
+const COUNTRY_TIERS: { tier: string; codes: string[] }[] = [
+  { tier: "Tier 1", codes: ["US", "GB", "CA", "AU", "NZ", "DE", "FR", "NL", "SE", "NO", "DK", "FI", "CH", "AT", "BE", "IE", "IT", "ES", "JP", "KR", "SG"] },
+  { tier: "Tier 2", codes: ["PL", "CZ", "PT", "GR", "IL", "AE", "SA", "QA", "HK", "TW", "MY", "TH", "VN", "ID", "PH", "MX", "BR", "AR", "CL", "CO", "PE", "ZA", "TR", "RU", "UA", "KZ", "EE", "LV", "LT", "SK", "SI", "HU", "RO", "BG", "HR", "RS"] },
+];
+const tierOf = (code: string) =>
+  COUNTRY_TIERS[0].codes.includes(code) ? "Tier 1" : COUNTRY_TIERS[1].codes.includes(code) ? "Tier 2" : "Tier 3";
 function countriesOf(rule: RouteRule): string[] {
   if (rule.countries && rule.countries.length) return rule.countries;
   if (rule.country) return [rule.country.toUpperCase() === "ANY" ? "ANY" : rule.country.toUpperCase()];
@@ -632,9 +638,11 @@ function countriesOf(rule: RouteRule): string[] {
 function CountryMultiSelect({
   value,
   onChange,
+  traffic,
 }: {
   value: string[];
   onChange: (next: string[]) => void;
+  traffic?: Map<string, number>;
 }) {
   const [search, setSearch] = useState("");
   const anyMode = value.includes("ANY");
@@ -643,15 +651,58 @@ function CountryMultiSelect({
     if (anyMode) return onChange([code]);
     onChange(value.includes(code) ? value.filter((c) => c !== code) : [...value, code]);
   };
-  const filtered = COUNTRIES.filter(([code, name]) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return code.toLowerCase().includes(q) || name.toLowerCase().includes(q);
-  }).slice(0, 60);
+  const toggleTier = (codes: string[]) => {
+    const allSelected = codes.every((c) => value.includes(c));
+    const without = value.filter((c) => !codes.includes(c));
+    onChange(allSelected ? without : [...without, ...codes]);
+  };
+  const q = search.trim().toLowerCase();
+  const searching = q.length > 0;
+  const matches = ([code, name]: [string, string]) =>
+    code.toLowerCase().includes(q) || name.toLowerCase().includes(q);
+  const byTraffic = (list: [string, string][]) =>
+    [...list].sort((a, b) => (traffic?.get(b[0]) || 0) - (traffic?.get(a[0]) || 0));
+  const t1 = byTraffic(COUNTRIES.filter(([c, n]) => tierOf(c) === "Tier 1" && (!searching || matches([c, n]))));
+  const t2 = byTraffic(COUNTRIES.filter(([c, n]) => tierOf(c) === "Tier 2" && (!searching || matches([c, n]))));
+  const t3 = byTraffic(COUNTRIES.filter(([c, n]) => tierOf(c) === "Tier 3" && (!searching || matches([c, n]))));
+  const tierRow = (tier: string, list: [string, string][], codes: string[]) => {
+    if (!list.length) return null;
+    const allSelected = codes.length > 0 && codes.every((c) => value.includes(c));
+    return (
+      <div className="countrytier" key={tier}>
+        <button
+          type="button"
+          className={"countrytierhead" + (allSelected ? " all" : "")}
+          onClick={() => toggleTier(codes)}
+          title={allSelected ? "Clear tier" : "Select entire tier"}
+        >
+          <span>{tier}</span>
+          <em>{allSelected ? "✓ " : ""}{codes.length}</em>
+        </button>
+        <div className="countrylist">
+          {list.map(([code, name]) => {
+            const clicks = traffic?.get(code) || 0;
+            return (
+              <label key={code} className={value.includes(code) ? "checked" : ""}>
+                <input type="checkbox" checked={value.includes(code)} onChange={() => toggle(code)} />
+                <CountryFlag code={code} size={15} />
+                <span>{name}</span>
+                {clicks > 0 && <em className="countryclicks" title={`${clicks} clicks`}>{clicks}</em>}
+                <b>{code}</b>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
   return (
     <div className="countrypicker">
       <div className="countrypickerhead">
-        <span className="countrypicker-title">Countries</span>
+        <span className="countrypicker-title">
+          Countries
+          {value.length > 0 && !anyMode && <em className="countrycount">{value.length} selected</em>}
+        </span>
         <label className="anyline">
           <input type="checkbox" checked={anyMode} onChange={(e) => setAny(e.target.checked)} />
           All countries
@@ -678,21 +729,29 @@ function CountryMultiSelect({
               ))}
             </div>
           )}
-          <div className="countrylist">
-            {filtered.map(([code, name]) => (
-              <label key={code} className={value.includes(code) ? "checked" : ""}>
-                <input
-                  type="checkbox"
-                  checked={value.includes(code)}
-                  onChange={() => toggle(code)}
-                />
-                <CountryFlag code={code} size={15} />
-                <span>{name}</span>
-                <b>{code}</b>
-              </label>
-            ))}
-            {!filtered.length && <div className="emptymini">No countries match</div>}
-          </div>
+          {searching ? (
+            <div className="countrylist">
+              {[...t1, ...t2, ...t3].map(([code, name]) => {
+                const clicks = traffic?.get(code) || 0;
+                return (
+                  <label key={code} className={value.includes(code) ? "checked" : ""}>
+                    <input type="checkbox" checked={value.includes(code)} onChange={() => toggle(code)} />
+                    <CountryFlag code={code} size={15} />
+                    <span>{name}</span>
+                    {clicks > 0 && <em className="countryclicks" title={`${clicks} clicks`}>{clicks}</em>}
+                    <b>{code}</b>
+                  </label>
+                );
+              })}
+              {![...t1, ...t2, ...t3].length && <div className="emptymini">No countries match</div>}
+            </div>
+          ) : (
+            <>
+              {tierRow("Tier 1", t1, COUNTRY_TIERS[0].codes)}
+              {tierRow("Tier 2", t2, COUNTRY_TIERS[1].codes)}
+              {tierRow("Tier 3", t3, [])}
+            </>
+          )}
         </>
       )}
     </div>
@@ -716,14 +775,18 @@ function RuleModal({
   const [destination, setDestination] = useState("");
   const [busy, setBusy] = useState(false);
   const [routeStats, setRouteStats] = useState<Map<string, number>>(new Map());
+  const [countryTraffic, setCountryTraffic] = useState<Map<string, number>>(new Map());
   const rules = link.routes || [];
   useEffect(() => {
     fetch(`/api/analytics?period=month&linkId=${link.id}&pageSize=1`)
       .then((r) => r.json())
       .then((a: AnalyticsData) => {
-        const map = new Map<string, number>();
-        (a.routes || []).forEach((r) => map.set(r.route_id, r.clicks));
-        setRouteStats(map);
+        const routeMap = new Map<string, number>();
+        (a.routes || []).forEach((r) => routeMap.set(r.route_id, r.clicks));
+        setRouteStats(routeMap);
+        const geoMap = new Map<string, number>();
+        (a.countries || []).forEach((c) => geoMap.set(c.country, c.clicks));
+        setCountryTraffic(geoMap);
       })
       .catch(() => {});
   }, [link.id]);
@@ -888,7 +951,7 @@ function RuleModal({
               empty or pick "All countries" to match every visitor.
             </small>
           </div>
-          <CountryMultiSelect value={countries} onChange={setCountries} />
+          <CountryMultiSelect value={countries} onChange={setCountries} traffic={countryTraffic} />
           <div className="rulegrid">
             <label>
               Device
