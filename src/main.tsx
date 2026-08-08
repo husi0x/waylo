@@ -3,9 +3,11 @@ import { createRoot } from "react-dom/client";
 import {
   Activity,
   BarChart3,
+  Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
+  ChevronUp,
   Copy,
   ExternalLink,
   Globe2,
@@ -645,6 +647,7 @@ function CountryMultiSelect({
   traffic?: Map<string, number>;
 }) {
   const [search, setSearch] = useState("");
+  const [openTier, setOpenTier] = useState<string | null>("Tier 1");
   const anyMode = value.includes("ANY");
   const setAny = (on: boolean) => onChange(on ? ["ANY"] : []);
   const toggle = (code: string) => {
@@ -668,31 +671,54 @@ function CountryMultiSelect({
   const tierRow = (tier: string, list: [string, string][], codes: string[]) => {
     if (!list.length) return null;
     const allSelected = codes.length > 0 && codes.every((c) => value.includes(c));
+    const selectedCount = codes.filter((c) => value.includes(c)).length;
+    const open = openTier === tier;
+    const badge = allSelected
+      ? `All ${codes.length}`
+      : selectedCount > 0
+        ? `${selectedCount}/${codes.length}`
+        : String(codes.length);
     return (
       <div className="countrytier" key={tier}>
-        <button
-          type="button"
-          className={"countrytierhead" + (allSelected ? " all" : "")}
-          onClick={() => toggleTier(codes)}
-          title={allSelected ? "Clear tier" : "Select entire tier"}
-        >
-          <span>{tier}</span>
-          <em>{allSelected ? "✓ " : ""}{codes.length}</em>
-        </button>
-        <div className="countrylist">
-          {list.map(([code, name]) => {
-            const clicks = traffic?.get(code) || 0;
-            return (
-              <label key={code} className={value.includes(code) ? "checked" : ""}>
-                <input type="checkbox" checked={value.includes(code)} onChange={() => toggle(code)} />
-                <CountryFlag code={code} size={15} />
-                <span>{name}</span>
-                {clicks > 0 && <em className="countryclicks" title={`${clicks} clicks`}>{clicks}</em>}
-                <b>{code}</b>
-              </label>
-            );
-          })}
+        <div className="countrytierhead">
+          <button
+            type="button"
+            className={"tierselect" + (allSelected ? " all" : "")}
+            onClick={() => toggleTier(codes)}
+            title={allSelected ? "Clear tier" : "Select entire tier"}
+          >
+            <span className="tiercheck">
+              {allSelected && <Check size={11} strokeWidth={3.5} />}
+            </span>
+            <span className="tiername">{tier}</span>
+            <em>{badge}</em>
+          </button>
+          <button
+            type="button"
+            className="tierchevron"
+            onClick={() => setOpenTier(open ? null : tier)}
+            title={open ? "Collapse" : "Expand"}
+            aria-label={open ? `Collapse ${tier}` : `Expand ${tier}`}
+          >
+            {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
         </div>
+        {open && (
+          <div className="countrylist">
+            {list.map(([code, name]) => {
+              const clicks = traffic?.get(code) || 0;
+              return (
+                <label key={code} className={value.includes(code) ? "checked" : ""}>
+                  <input type="checkbox" checked={value.includes(code)} onChange={() => toggle(code)} />
+                  <CountryFlag code={code} size={15} />
+                  <span>{name}</span>
+                  {clicks > 0 && <em className="countryclicks" title={`${clicks} clicks`}>{clicks}</em>}
+                  <b>{code}</b>
+                </label>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
@@ -749,7 +775,7 @@ function CountryMultiSelect({
             <>
               {tierRow("Tier 1", t1, COUNTRY_TIERS[0].codes)}
               {tierRow("Tier 2", t2, COUNTRY_TIERS[1].codes)}
-              {tierRow("Tier 3", t3, [])}
+              {tierRow("Tier 3", t3, t3.map(([c]) => c))}
             </>
           )}
         </>
