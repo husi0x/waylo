@@ -877,7 +877,7 @@ function RuleModal({
             </div>
           ))}
           {!rules.length && (
-            <div className="emptymini">No rules yet — create the first one below.</div>
+            <div className="emptymini">No rules yet. Create the first one below.</div>
           )}
         </div>
         <form className="ruleform" onSubmit={save}>
