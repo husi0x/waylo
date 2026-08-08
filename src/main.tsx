@@ -46,7 +46,8 @@ import { ExitPagePreview } from "./ExitPagePreview";
 import "./styles.css";
 type RouteRule = {
   id: string;
-  country: string;
+  country?: string;
+  countries: string[];
   device: string;
   os: string;
   destination: string;
@@ -107,6 +108,7 @@ type ClickEvent = {
   source: string;
   referrer: string;
   destination: string;
+  event_type?: string;
   created_at: string;
 };
 type AnalyticsData = {
@@ -115,6 +117,7 @@ type AnalyticsData = {
     unique_visitors: number;
     countries: number;
     links?: number;
+    exit_clicks?: number;
   };
   events: ClickEvent[];
   daily: { day: string; clicks: number; unique_visitors: number }[];
@@ -136,6 +139,12 @@ type AnalyticsData = {
   }[];
   links?: {
     link_id: string;
+    clicks: number;
+    unique_visitors: number;
+  }[];
+  routes?: {
+    link_id: string;
+    route_id: string;
     clicks: number;
     unique_visitors: number;
   }[];
@@ -599,10 +608,11 @@ function Links({ data, onAdd, onEdit, refresh, notify }: any) {
         <RuleModal
           link={selected}
           close={() => setSelected(null)}
+          notify={notify}
           done={() => {
             setSelected(null);
             refresh();
-            notify("Routing rule saved");
+            notify("Routing rules saved");
           }}
         />
       )}
@@ -610,95 +620,320 @@ function Links({ data, onAdd, onEdit, refresh, notify }: any) {
   );
 }
 
+const COUNTRIES: [string, string][] = [
+  ["AF", "Afghanistan"],["AX", "Åland Islands"],["AL", "Albania"],["DZ", "Algeria"],["AS", "American Samoa"],["AD", "Andorra"],["AO", "Angola"],["AI", "Anguilla"],["AQ", "Antarctica"],["AG", "Antigua & Barbuda"],["AR", "Argentina"],["AM", "Armenia"],["AW", "Aruba"],["AU", "Australia"],["AT", "Austria"],["AZ", "Azerbaijan"],["BS", "Bahamas"],["BH", "Bahrain"],["BD", "Bangladesh"],["BB", "Barbados"],["BY", "Belarus"],["BE", "Belgium"],["BZ", "Belize"],["BJ", "Benin"],["BM", "Bermuda"],["BT", "Bhutan"],["BO", "Bolivia"],["BQ", "Caribbean Netherlands"],["BA", "Bosnia & Herzegovina"],["BW", "Botswana"],["BV", "Bouvet Island"],["BR", "Brazil"],["IO", "British Indian Ocean Territory"],["BN", "Brunei"],["BG", "Bulgaria"],["BF", "Burkina Faso"],["BI", "Burundi"],["KH", "Cambodia"],["CM", "Cameroon"],["CA", "Canada"],["CV", "Cape Verde"],["KY", "Cayman Islands"],["CF", "Central African Republic"],["TD", "Chad"],["CL", "Chile"],["CN", "China"],["CX", "Christmas Island"],["CC", "Cocos (Keeling) Islands"],["CO", "Colombia"],["KM", "Comoros"],["CG", "Congo - Brazzaville"],["CD", "Congo - Kinshasa"],["CK", "Cook Islands"],["CR", "Costa Rica"],["CI", "Côte d'Ivoire"],["HR", "Croatia"],["CU", "Cuba"],["CW", "Curaçao"],["CY", "Cyprus"],["CZ", "Czechia"],["DK", "Denmark"],["DJ", "Djibouti"],["DM", "Dominica"],["DO", "Dominican Republic"],["EC", "Ecuador"],["EG", "Egypt"],["SV", "El Salvador"],["GQ", "Equatorial Guinea"],["ER", "Eritrea"],["EE", "Estonia"],["SZ", "Eswatini"],["ET", "Ethiopia"],["FK", "Falkland Islands"],["FO", "Faroe Islands"],["FJ", "Fiji"],["FI", "Finland"],["FR", "France"],["GF", "French Guiana"],["PF", "French Polynesia"],["TF", "French Southern Territories"],["GA", "Gabon"],["GM", "Gambia"],["GE", "Georgia"],["DE", "Germany"],["GH", "Ghana"],["GI", "Gibraltar"],["GR", "Greece"],["GL", "Greenland"],["GD", "Grenada"],["GP", "Guadeloupe"],["GU", "Guam"],["GT", "Guatemala"],["GG", "Guernsey"],["GN", "Guinea"],["GW", "Guinea-Bissau"],["GY", "Guyana"],["HT", "Haiti"],["HM", "Heard & McDonald Islands"],["VA", "Vatican City"],["HN", "Honduras"],["HK", "Hong Kong"],["HU", "Hungary"],["IS", "Iceland"],["IN", "India"],["ID", "Indonesia"],["IR", "Iran"],["IQ", "Iraq"],["IE", "Ireland"],["IM", "Isle of Man"],["IL", "Israel"],["IT", "Italy"],["JM", "Jamaica"],["JP", "Japan"],["JE", "Jersey"],["JO", "Jordan"],["KZ", "Kazakhstan"],["KE", "Kenya"],["KI", "Kiribati"],["KP", "North Korea"],["KR", "South Korea"],["KW", "Kuwait"],["KG", "Kyrgyzstan"],["LA", "Laos"],["LV", "Latvia"],["LB", "Lebanon"],["LS", "Lesotho"],["LR", "Liberia"],["LY", "Libya"],["LI", "Liechtenstein"],["LT", "Lithuania"],["LU", "Luxembourg"],["MO", "Macao"],["MG", "Madagascar"],["MW", "Malawi"],["MY", "Malaysia"],["MV", "Maldives"],["ML", "Mali"],["MT", "Malta"],["MH", "Marshall Islands"],["MQ", "Martinique"],["MR", "Mauritania"],["MU", "Mauritius"],["YT", "Mayotte"],["MX", "Mexico"],["FM", "Micronesia"],["MD", "Moldova"],["MC", "Monaco"],["MN", "Mongolia"],["ME", "Montenegro"],["MS", "Montserrat"],["MA", "Morocco"],["MZ", "Mozambique"],["MM", "Myanmar (Burma)"],["NA", "Namibia"],["NR", "Nauru"],["NP", "Nepal"],["NL", "Netherlands"],["NC", "New Caledonia"],["NZ", "New Zealand"],["NI", "Nicaragua"],["NE", "Niger"],["NG", "Nigeria"],["NU", "Niue"],["NF", "Norfolk Island"],["MK", "North Macedonia"],["MP", "Northern Mariana Islands"],["NO", "Norway"],["OM", "Oman"],["PK", "Pakistan"],["PW", "Palau"],["PS", "Palestine"],["PA", "Panama"],["PG", "Papua New Guinea"],["PY", "Paraguay"],["PE", "Peru"],["PH", "Philippines"],["PN", "Pitcairn Islands"],["PL", "Poland"],["PT", "Portugal"],["PR", "Puerto Rico"],["QA", "Qatar"],["RE", "Réunion"],["RO", "Romania"],["RU", "Russia"],["RW", "Rwanda"],["WS", "Samoa"],["SM", "San Marino"],["ST", "São Tomé & Príncipe"],["SA", "Saudi Arabia"],["SN", "Senegal"],["RS", "Serbia"],["SC", "Seychelles"],["SL", "Sierra Leone"],["SG", "Singapore"],["SX", "Sint Maarten"],["SK", "Slovakia"],["SI", "Slovenia"],["SB", "Solomon Islands"],["SO", "Somalia"],["ZA", "South Africa"],["GS", "South Georgia & South Sandwich Islands"],["SS", "South Sudan"],["ES", "Spain"],["LK", "Sri Lanka"],["BL", "St. Barthélemy"],["SH", "St. Helena"],["KN", "St. Kitts & Nevis"],["LC", "St. Lucia"],["MF", "St. Martin"],["PM", "St. Pierre & Miquelon"],["VC", "St. Vincent & Grenadines"],["SD", "Sudan"],["SR", "Suriname"],["SJ", "Svalbard & Jan Mayen"],["SE", "Sweden"],["CH", "Switzerland"],["SY", "Syria"],["TW", "Taiwan"],["TJ", "Tajikistan"],["TZ", "Tanzania"],["TH", "Thailand"],["TL", "Timor-Leste"],["TG", "Togo"],["TK", "Tokelau"],["TO", "Tonga"],["TT", "Trinidad & Tobago"],["TN", "Tunisia"],["TR", "Türkiye"],["TM", "Turkmenistan"],["TC", "Turks & Caicos Islands"],["TV", "Tuvalu"],["UG", "Uganda"],["UA", "Ukraine"],["AE", "United Arab Emirates"],["GB", "United Kingdom"],["US", "United States"],["UM", "U.S. Outlying Islands"],["UY", "Uruguay"],["UZ", "Uzbekistan"],["VU", "Vanuatu"],["VE", "Venezuela"],["VN", "Vietnam"],["VG", "British Virgin Islands"],["VI", "U.S. Virgin Islands"],["WF", "Wallis & Futuna"],["EH", "Western Sahara"],["YE", "Yemen"],["ZM", "Zambia"],["ZW", "Zimbabwe"],
+];
+const countryName = (code: string) => COUNTRIES.find(([c]) => c === code)?.[1] || code;
+function countriesOf(rule: RouteRule): string[] {
+  if (rule.countries && rule.countries.length) return rule.countries;
+  if (rule.country) return [rule.country.toUpperCase() === "ANY" ? "ANY" : rule.country.toUpperCase()];
+  return ["ANY"];
+}
+function CountryMultiSelect({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const anyMode = value.includes("ANY");
+  const setAny = (on: boolean) => onChange(on ? ["ANY"] : []);
+  const toggle = (code: string) => {
+    if (anyMode) return onChange([code]);
+    onChange(value.includes(code) ? value.filter((c) => c !== code) : [...value, code]);
+  };
+  const filtered = COUNTRIES.filter(([code, name]) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return code.toLowerCase().includes(q) || name.toLowerCase().includes(q);
+  }).slice(0, 60);
+  return (
+    <div className="countrypicker">
+      <div className="countrypickerhead">
+        <span className="countrypicker-title">Countries</span>
+        <label className="anyline">
+          <input type="checkbox" checked={anyMode} onChange={(e) => setAny(e.target.checked)} />
+          All countries
+        </label>
+      </div>
+      {!anyMode && (
+        <>
+          <input
+            className="countrysearch"
+            placeholder="Search country…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {value.length > 0 && (
+            <div className="countrychips">
+              {value.map((code) => (
+                <span key={code} className="chip countrychip">
+                  <CountryFlag code={code} size={14} />
+                  {countryName(code)}
+                  <button type="button" onClick={() => toggle(code)} aria-label={`Remove ${code}`}>
+                    <X size={11} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="countrylist">
+            {filtered.map(([code, name]) => (
+              <label key={code} className={value.includes(code) ? "checked" : ""}>
+                <input
+                  type="checkbox"
+                  checked={value.includes(code)}
+                  onChange={() => toggle(code)}
+                />
+                <CountryFlag code={code} size={15} />
+                <span>{name}</span>
+                <b>{code}</b>
+              </label>
+            ))}
+            {!filtered.length && <div className="emptymini">No countries match</div>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 function RuleModal({
   link,
   close,
+  notify,
   done,
 }: {
   link: Link;
   close: () => void;
+  notify: (s: string) => void;
   done: () => void;
 }) {
-  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [device, setDevice] = useState("Any");
+  const [os, setOs] = useState("Any");
+  const [destination, setDestination] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [routeStats, setRouteStats] = useState<Map<string, number>>(new Map());
+  const rules = link.routes || [];
+  useEffect(() => {
+    fetch(`/api/analytics?period=month&linkId=${link.id}&pageSize=1`)
+      .then((r) => r.json())
+      .then((a: AnalyticsData) => {
+        const map = new Map<string, number>();
+        (a.routes || []).forEach((r) => map.set(r.route_id, r.clicks));
+        setRouteStats(map);
+      })
+      .catch(() => {});
+  }, [link.id]);
+  const startEdit = (rule: RouteRule) => {
+    setEditingId(rule.id);
+    setCountries(countriesOf(rule));
+    setDevice(rule.device || "Any");
+    setOs(rule.os || "Any");
+    setDestination(rule.destination);
+  };
+  const resetForm = () => {
+    setEditingId(null);
+    setCountries([]);
+    setDevice("Any");
+    setOs("Any");
+    setDestination("");
+  };
+  const save = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    const rule = {
-      id: crypto.randomUUID(),
-      country: f.get("country"),
-      device: f.get("device"),
-      os: f.get("os"),
-      destination: f.get("destination"),
+    const nextCountries = editingId
+      ? countries.length
+        ? countries
+        : ["ANY"]
+      : countries.length
+        ? countries
+        : ["ANY"];
+    const rule: RouteRule = {
+      id: editingId || crypto.randomUUID(),
+      countries: nextCountries,
+      device,
+      os,
+      destination: destination.trim(),
     };
+    let next: RouteRule[];
+    if (editingId) next = rules.map((x) => (x.id === editingId ? rule : x));
+    else next = [...rules, rule];
+    setBusy(true);
+    try {
+      const res = await fetch("/api/links/" + link.id, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ routes: next }),
+      });
+      if (!res.ok) return notify((await res.json()).error || "Could not save rule");
+      resetForm();
+      done();
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (ruleId: string) => {
+    if (!confirm("Delete this routing rule?")) return;
     const res = await fetch("/api/links/" + link.id, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ routes: [...(link.routes || []), rule] }),
+      body: JSON.stringify({ routes: rules.filter((x) => x.id !== ruleId) }),
     });
     if (res.ok) done();
   };
+  const move = async (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= rules.length) return;
+    const next = [...rules];
+    [next[index], next[target]] = [next[target], next[index]];
+    await fetch("/api/links/" + link.id, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ routes: next }),
+    });
+    done();
+  };
   return (
-    <div className="overlay">
-      <form className="modal" onSubmit={submit}>
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && close()}>
+      <div className="modal rulemodal">
         <div className="modalheader">
           <span>
-            <h2>Smart routing rule</h2>
-            <p>{link.name} · rules are evaluated from top to bottom.</p>
+            <h2>Smart routing rules</h2>
+            <p>
+              {link.name} · rules are evaluated from top to bottom, the first
+              match wins.
+            </p>
           </span>
           <button type="button" className="icon modalclose" onClick={close} aria-label="Close modal">
             <X size={17} />
           </button>
         </div>
-        <div className="rulegrid">
-          <label>
-            Country
-            <select name="country">
-              <option value="Any">Any country</option>
-              <option value="US">United States</option>
-              <option value="DE">Germany</option>
-              <option value="GB">United Kingdom</option>
-              <option value="BR">Brazil</option>
-              <option value="CA">Canada</option>
-            </select>
-          </label>
-          <label>
-            Device
-            <select name="device">
-              <option>Any</option>
-              <option>Mobile</option>
-              <option>Desktop</option>
-            </select>
-          </label>
-          <label>
-            Operating system
-            <select name="os">
-              <option>Any</option>
-              <option>iOS</option>
-              <option>Android</option>
-              <option>Windows</option>
-              <option>macOS</option>
-            </select>
-          </label>
+        <div className="rulelist">
+          {rules.map((rule, index) => (
+            <div className="ruleitem" key={rule.id}>
+              <div className="rulemain">
+                <div className="rulegeo">
+                  {countriesOf(rule).includes("ANY") ? (
+                    <span className="chip geochip any">🌍 All countries</span>
+                  ) : (
+                    countriesOf(rule).map((code) => (
+                      <span key={code} className="chip geochip">
+                        <CountryFlag code={code} size={13} />
+                        {code}
+                      </span>
+                    ))
+                  )}
+                </div>
+                <div className="rulemeta">
+                  <span className="chip">{rule.device}</span>
+                  <span className="chip">{rule.os}</span>
+                  <b className="ruledest" title={rule.destination}>
+                    {rule.destination}
+                  </b>
+                  <small className="ruleclicks">
+                    <MousePointer2 size={11} />
+                    {(routeStats.get(rule.id) || 0).toLocaleString()} clicks
+                  </small>
+                </div>
+              </div>
+              <div className="ruleactions">
+                <button
+                  type="button"
+                  className="icon"
+                  disabled={index === 0}
+                  onClick={() => move(index, -1)}
+                  title="Move up"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="icon"
+                  disabled={index === rules.length - 1}
+                  onClick={() => move(index, 1)}
+                  title="Move down"
+                >
+                  <ChevronRight size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="icon"
+                  title="Edit rule"
+                  onClick={() => startEdit(rule)}
+                >
+                  <Settings size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="icon danger"
+                  title="Delete rule"
+                  onClick={() => remove(rule.id)}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+          {!rules.length && (
+            <div className="emptymini">No rules yet — create the first one below.</div>
+          )}
         </div>
-        <label>
-          Route destination
-          <input
-            name="destination"
-            type="url"
-            placeholder="https://example.com/local-offer"
-            required
-          />
-        </label>
-        <div className="secureline">
-          <ShieldCheck size={16} />
-          Only public HTTPS destinations are accepted.
-        </div>
-        <div className="modalactions">
-          <button type="button" onClick={close}>
-            Cancel
-          </button>
-          <button className="primary">Save rule</button>
-        </div>
-      </form>
+        <form className="ruleform" onSubmit={save}>
+          <div className="secttitle">
+            <span>{editingId ? "EDIT RULE" : "NEW RULE"}</span>
+            <small>
+              Choose one or more countries, device and OS. Leave countries
+              empty or pick "All countries" to match every visitor.
+            </small>
+          </div>
+          <CountryMultiSelect value={countries} onChange={setCountries} />
+          <div className="rulegrid">
+            <label>
+              Device
+              <select value={device} onChange={(e) => setDevice(e.target.value)}>
+                <option>Any</option>
+                <option>Mobile</option>
+                <option>Tablet</option>
+                <option>Desktop</option>
+              </select>
+            </label>
+            <label>
+              Operating system
+              <select value={os} onChange={(e) => setOs(e.target.value)}>
+                <option>Any</option>
+                <option>iOS</option>
+                <option>Android</option>
+                <option>Windows</option>
+                <option>macOS</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            Route destination
+            <input
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+              type="url"
+              placeholder="https://example.com/local-offer"
+              required
+            />
+          </label>
+          <div className="secureline">
+            <ShieldCheck size={16} />
+            Only public HTTPS destinations are accepted.
+          </div>
+          <div className="modalactions">
+            <button type="button" onClick={() => (editingId ? resetForm() : close())}>
+              {editingId ? "Cancel edit" : "Close"}
+            </button>
+            <button className="primary" disabled={busy}>
+              {editingId ? "Update rule" : "Add rule"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -1145,6 +1380,7 @@ function Analytics({
       [
         "Time",
         "Link",
+        "Type",
         "Source",
         "Referrer",
         "Country",
@@ -1160,6 +1396,11 @@ function Analytics({
         event.created_at,
         data.links.find((link) => link.id === event.link_id)?.name ||
           event.link_id,
+        event.event_type === "exit_click"
+          ? "Exit page click"
+          : event.route_id
+            ? "Smart rule"
+            : "Redirect",
         event.source,
         event.referrer,
         event.country,
@@ -1350,6 +1591,11 @@ function Analytics({
           label="Links with traffic"
           value={(stats?.summary.links || 0).toLocaleString()}
         />
+        <Stat
+          icon={Zap}
+          label="Exit page clicks"
+          value={(stats?.summary.exit_clicks || 0).toLocaleString()}
+        />
       </div>
       <div
         className={`card chartcard analyticschart ${loading ? "loadingdata" : ""}`}
@@ -1517,7 +1763,11 @@ function RecentClicks({
                   <b>{link?.name || "Deleted link"}</b>
                   <small>
                     /{link?.slug || e.link_id} ·{" "}
-                    {e.route_id ? "smart rule" : "default route"}
+                    {e.event_type === "exit_click"
+                      ? "exit page click"
+                      : e.route_id
+                        ? "smart rule"
+                        : "default route"}
                   </small>
                 </td>
                 <td>
@@ -1551,7 +1801,11 @@ function RecentClicks({
                     {e.destination}
                   </b>
                   <small>
-                    {e.route_id ? "Rule destination" : "Default destination"}
+                    {e.event_type === "exit_click"
+                      ? "Exit page tap"
+                      : e.route_id
+                        ? "Rule destination"
+                        : "Default destination"}
                   </small>
                 </td>
               </tr>

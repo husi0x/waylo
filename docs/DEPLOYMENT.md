@@ -3,10 +3,10 @@
 ## Docker Compose
 
 1. Copy `.env.example` to `.env`.
-2. Set `TRACKING_CNAME` and `ADMIN_HOST`.
+2. Set `TRACKING_CNAME` and `ADMIN_HOST`. Optionally set `ADMIN_PATH` to a fixed secret admin path; when left unset a random path (`rk_…`) is generated on first boot and persisted in `DATA_DIR/data.json` (`auth.adminPath`) — it never defaults to `/admin`.
 3. Run `docker compose up -d --build`.
 4. Put Caddy, Nginx, Traefik or Cloudflare in front of `127.0.0.1:8787`.
-5. Open `https://ADMIN_HOST/admin` and create the first password.
+5. Open `https://ADMIN_HOST/<admin path>` and create the first password.
 
 The Compose service binds Waylo to loopback so the reverse proxy remains the only public entry point.
 

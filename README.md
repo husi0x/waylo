@@ -11,8 +11,8 @@ Waylo is a self-hosted smart-link, first-party click analytics and link-in-bio p
 - Password-protected administration panel
 - GEO, source, referrer, device, model, OS and browser analytics
 - Anonymous first-party unique visitor counting; full IP addresses are not stored
-- Rule-based destinations by GEO, device and OS
-- Smart exit page: hands visitors out of Instagram/TikTok/Facebook in-app browsers to the device browser, or deep-links into native apps (custom URL schemes)
+- Rule-based destinations by GEO (multiple countries per rule), device and OS, with per-rule click stats
+- Smart exit page: hands visitors out of Instagram/TikTok/Facebook in-app browsers to the device browser, or deep-links into native apps (custom URL schemes); button taps are tracked as exit page clicks
 - Domain ownership verification through unique DNS TXT records
 - Link-in-bio profile editor
 - SQLite/WAL persistence, CSV export, Docker deployment and health check
@@ -46,7 +46,7 @@ npm run build
 npm start
 ```
 
-The production admin panel is served at `/admin`. Public links use `https://connected-domain/slug`.
+The production admin panel is served at a secret path (see `ADMIN_PATH` in [Configuration](docs/CONFIGURATION.md)). When `ADMIN_PATH` is not set, a random path is generated on first boot and stored in `DATA_DIR/data.json` — never `/admin`. Public links use `https://connected-domain/slug`.
 
 Docker:
 
@@ -72,7 +72,7 @@ Express provides the authenticated admin API, public redirects and hosted profil
 Visitor -> CDN / reverse proxy -> Waylo redirect -> destination
                                   |-> SQLite analytics
 
-Administrator -> /admin -> authenticated API -> configuration
+Administrator -> /admin-secret-path -> authenticated API -> configuration
 ```
 
 ## Commands

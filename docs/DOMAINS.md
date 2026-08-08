@@ -14,6 +14,6 @@ DNS propagation can take from seconds to several hours. Verification is safe to 
 
 ## Admin separation
 
-One hostname can serve `https://example.com/campaign` and `https://example.com/admin`. The recommended arrangement uses `admin.example.com` with `ADMIN_HOST=admin.example.com` and separate public tracking domains. When `ADMIN_HOST` is set, admin pages and APIs return 404 on public domains.
+One hostname can serve `https://example.com/campaign` and `https://example.com/<admin path>`. The recommended arrangement uses `admin.example.com` with `ADMIN_HOST=admin.example.com` and separate public tracking domains. When `ADMIN_HOST` is set, admin pages and APIs return 404 on public domains. The admin path itself is either the `ADMIN_PATH` env value or a random path generated on first boot (never `/admin`).
 
 Waylo refuses to delete a domain assigned to a smart link. Reassign or delete those links first.

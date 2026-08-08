@@ -44,6 +44,7 @@ export function renderLanding(cfg = {}) {
     destination,
     fallback,
     hasCustomAction: Boolean(customAction),
+    track: cfg.track && cfg.track.linkId ? { linkId: cfg.track.linkId, routeId: cfg.track.routeId || null } : null,
   }).replace(/</g, '\\u003c');
   const seconds = countdown === 1 ? 'second' : 'seconds';
 
@@ -80,6 +81,22 @@ export function renderLanding(cfg = {}) {
   var startedAt = Date.now();
   var inFlight = false;
   var automaticAttempted = false;
+  var tracked = false;
+
+  function fireTrack(){
+    if (tracked || !cfg.track || !cfg.track.linkId) return;
+    tracked = true;
+    try {
+      var payload = new Blob([JSON.stringify(cfg.track)], { type: 'application/json' });
+      if (navigator.sendBeacon) navigator.sendBeacon('/track', payload);
+      else {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/track', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send(payload);
+      }
+    } catch (error) {}
+  }
 
   function clearPendingTimers(){
     if (redirectTimer !== null) clearTimeout(redirectTimer);
@@ -100,6 +117,7 @@ export function renderLanding(cfg = {}) {
     if (source === 'manual') clearPendingTimers();
     if (source === 'auto') automaticAttempted = true;
     inFlight = true;
+    fireTrack();
     continueButton.setAttribute('aria-disabled', 'true');
     status.textContent = 'Opening…';
     var target = cfg.primary || cfg.destination || cfg.fallback;
@@ -118,6 +136,8 @@ export function renderLanding(cfg = {}) {
   }
 
   continueButton.addEventListener('click', function(){ attemptOpen('manual'); });
+  var customActionLink = document.getElementById('custom-action');
+  if (customActionLink) customActionLink.addEventListener('click', function(){ fireTrack(); });
 
   if (cfg.auto) {
     updateCountdown();
