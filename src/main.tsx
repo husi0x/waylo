@@ -45,6 +45,7 @@ import {
 } from "recharts";
 import { EXIT_PAGE_DEFAULTS, isValidCountdownInput, normalizeCountdown, withExitPageDefaults } from "../exit-page-config.mjs";
 import { ExitPagePreview } from "./ExitPagePreview";
+import { ExitPageBuilder } from "./ExitPageBuilder";
 import "./styles.css";
 type RouteRule = {
   id: string;
@@ -73,6 +74,7 @@ type Link = {
   landingCustomLabel?: string;
   landingCustomUrl?: string;
   landingCountdown?: number;
+  exitTemplateId?: string | null;
   bulk?: boolean;
 };
 type Domain = {
@@ -264,8 +266,8 @@ function App() {
         {tab === "Domains" && (
           <Domains data={data} refresh={refresh} notify={notify} />
         )}{" "}
-        {tab === "Page builder" && (
-          <Builder data={data} setData={setData} notify={notify} />
+        {tab === "Exit page builder" && (
+          <ExitPageBuilder notify={notify} links={data.links} refreshLinks={() => void refresh()} />
         )}{" "}
         {tab === "Analytics" && (
           <Analytics data={data} analytics={analytics} refresh={refresh} />
@@ -306,7 +308,7 @@ function Sidebar({
     [LayoutDashboard, "Overview"],
     [Link2, "Smart links"],
     [Globe2, "Domains"],
-    [Sparkles, "Page builder"],
+    [Sparkles, "Exit page builder"],
     [BarChart3, "Analytics"],
     [Settings, "Settings"],
   ] as const;
@@ -353,7 +355,7 @@ function Top({ tab }: { tab: string }) {
     Overview: "Live performance across links, domains and visitors.",
     "Smart links": "Create destinations and control routing from one place.",
     Domains: "Connect, verify and monitor every traffic domain.",
-    "Page builder": "Shape the public profile and preview every change.",
+    "Exit page builder": "Design custom exit pages: colors, photos, buttons.",
     Analytics: "Explore first-party traffic by period, audience and link.",
     Settings: "Workspace preferences, retention and access status.",
   };
@@ -2335,6 +2337,14 @@ function LinkModal({
   const [landingCountdown, setLandingCountdown] = useState(String(exitPage.countdown));
   const [countdownError, setCountdownError] = useState("");
   const [customButtonError, setCustomButtonError] = useState("");
+  const [exitTemplates, setExitTemplates] = useState<{ id: string; name: string; usedBy: number }[]>([]);
+  const [exitTemplateId, setExitTemplateId] = useState<string>(initial?.exitTemplateId || "");
+  useEffect(() => {
+    fetch("/api/exit-templates")
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setExitTemplates)
+      .catch(() => {});
+  }, []);
   const available = domains.filter((d) => d.status === "active");
   const [bulk, setBulk] = useState(false);
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -2381,6 +2391,7 @@ function LinkModal({
     } else {
       body.landing = false;
     }
+    if (isEdit) body.exitTemplateId = exitTemplateId || null;
     if (bulk && !isEdit) {
       body.prefix = String(f.get("slug") || "")
         .replace(/^\//, "")
@@ -2528,6 +2539,30 @@ function LinkModal({
               onChange={(e) => setLandingOn(e.target.checked)}
             />
           </label>
+          {landingOn && exitTemplates.length > 0 && (
+            <label className="switchline">
+              <span>
+                <b>Custom template</b>
+                <small>
+                  Use a template from the Exit page builder instead of the basic
+                  card. Basic settings below are ignored while a template is
+                  selected.
+                </small>
+              </span>
+              <select
+                value={exitTemplateId}
+                onChange={(e) => setExitTemplateId(e.target.value)}
+              >
+                <option value="">Basic card (default)</option>
+                {exitTemplates.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>
+                    {tpl.name}
+                    {tpl.usedBy ? ` · ${tpl.usedBy} link${tpl.usedBy > 1 ? "s" : ""}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {landingOn && (
             <div className="landingbox">
               <label>
