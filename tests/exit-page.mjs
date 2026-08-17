@@ -193,8 +193,9 @@ try {
   });
   const inAppHtml = await inApp.text();
   assert.equal(inApp.status, 200, inAppHtml);
+  // link with only defaults now renders the seeded default template
+  assert.match(inAppHtml, /xt-shell/);
   assert.match(inAppHtml, /Adults Only/);
-  assert.match(inAppHtml, /Opening automatically in 3 seconds/);
   assert.match(inAppHtml, /instagram:\/\/extbrowser/);
   assert.match(inAppHtml, /instagram:\/\/extbrowser\/\?url=https%3A%2F%2Fexample\.com%2Fadult/);
   assert.doesNotMatch(inAppHtml, /instagram:\/\/extbrowser\/\?url=http%3A%2F%2Flinks\.test%2Fadult/);

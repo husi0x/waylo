@@ -267,7 +267,7 @@ function App() {
           <Domains data={data} refresh={refresh} notify={notify} />
         )}{" "}
         {tab === "Exit page builder" && (
-          <ExitPageBuilder notify={notify} links={data.links} refreshLinks={() => void refresh()} />
+          <ExitPageBuilder notify={notify} />
         )}{" "}
         {tab === "Analytics" && (
           <Analytics data={data} analytics={analytics} refresh={refresh} />
@@ -2391,7 +2391,7 @@ function LinkModal({
     } else {
       body.landing = false;
     }
-    if (isEdit) body.exitTemplateId = exitTemplateId || null;
+    body.exitTemplateId = exitTemplateId || null;
     if (bulk && !isEdit) {
       body.prefix = String(f.get("slug") || "")
         .replace(/^\//, "")
@@ -2539,21 +2539,20 @@ function LinkModal({
               onChange={(e) => setLandingOn(e.target.checked)}
             />
           </label>
-          {landingOn && exitTemplates.length > 0 && (
+          {landingOn && (
             <label className="switchline">
               <span>
-                <b>Custom template</b>
+                <b>Template</b>
                 <small>
-                  Use a template from the Exit page builder instead of the basic
-                  card. Basic settings below are ignored while a template is
-                  selected.
+                  Pick a template from the Exit page builder. The default
+                  template is used when nothing is selected.
                 </small>
               </span>
               <select
                 value={exitTemplateId}
                 onChange={(e) => setExitTemplateId(e.target.value)}
               >
-                <option value="">Basic card (default)</option>
+                <option value="">Default template</option>
                 {exitTemplates.map((tpl) => (
                   <option key={tpl.id} value={tpl.id}>
                     {tpl.name}

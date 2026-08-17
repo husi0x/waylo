@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Copy, Eye, ImageIcon, Plus, RotateCw, Save, Trash2, Upload, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronUp, Eye, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import {
   defaultExitTemplate,
   normalizeExitTemplate,
   type ExitTemplate,
 } from "../exit-template.mjs";
 
-type TemplateListItem = { id: string; name: string; usedBy: number };
+type TemplateListItem = { id: string; name: string; usedBy: number; isDefault?: boolean };
 
 const PALETTE_FIELDS: [keyof ExitTemplate["palette"], string][] = [
   ["bg", "Background"],
@@ -120,13 +120,38 @@ function ColorField({
   );
 }
 
-export function ExitPageBuilder({ notify, links, refreshLinks }: { notify: (s: string) => void; links: { id: string; name: string; exitTemplateId?: string | null }[]; refreshLinks: () => void }) {
+function Section({
+  title,
+  hint,
+  children,
+  defaultOpen = true,
+}: {
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="buildersection">
+      <button type="button" className="secthead" onClick={() => setOpen((v) => !v)}>
+        <span>
+          <b>{title}</b>
+          {hint && <small>{hint}</small>}
+        </span>
+        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </button>
+      {open && <div className="sectbody">{children}</div>}
+    </div>
+  );
+}
+
+export function ExitPageBuilder({ notify }: { notify: (s: string) => void }) {
   const [templates, setTemplates] = useState<TemplateListItem[]>([]);
   const [current, setCurrent] = useState<ExitTemplate | null>(null);
   const [dirty, setDirty] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [linksMenu, setLinksMenu] = useState(false);
 
   const loadList = React.useCallback(async () => {
     const res = await fetch("/api/exit-templates");
@@ -146,11 +171,8 @@ export function ExitPageBuilder({ notify, links, refreshLinks }: { notify: (s: s
   };
 
   const openTemplate = async (id: string) => {
-    const res = await fetch("/api/exit-templates");
-    if (!res.ok) return;
-    const all: ExitTemplate[] = await res.json();
-    // list endpoint returns summaries; fetch full state instead
     const stateRes = await fetch("/api/state");
+    if (!stateRes.ok) return;
     const state = await stateRes.json();
     const found = (state.exitTemplates || []).find((t: ExitTemplate) => t.id === id);
     if (found) {
@@ -162,6 +184,7 @@ export function ExitPageBuilder({ notify, links, refreshLinks }: { notify: (s: s
   const createTemplate = () => {
     const t = defaultExitTemplate();
     t.id = "";
+    t.name = "New template";
     setCurrent(t);
     setDirty(true);
   };
@@ -178,7 +201,7 @@ export function ExitPageBuilder({ notify, links, refreshLinks }: { notify: (s: s
     setCurrent(normalizeExitTemplate(saved));
     setDirty(false);
     await loadList();
-    notify("Template saved");
+    notify(current.id && current.id === "default" ? "Default template updated" : "Template saved");
   };
 
   const deleteTemplate = async (id: string) => {
@@ -186,19 +209,14 @@ export function ExitPageBuilder({ notify, links, refreshLinks }: { notify: (s: s
     if (!res.ok) return notify((await res.json().catch(() => ({}))).error || "Could not delete");
     if (current?.id === id) setCurrent(null);
     await loadList();
-    refreshLinks();
     notify("Template deleted");
   };
 
-  const assignToLink = async (linkId: string, templateId: string) => {
-    const res = await fetch("/api/links/" + linkId, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ exitTemplateId: templateId || null }),
-    });
-    if (!res.ok) return notify((await res.json().catch(() => ({}))).error || "Could not assign");
-    refreshLinks();
-    notify(templateId ? "Template assigned to link" : "Template removed from link");
+  const duplicateTemplate = async (source: ExitTemplate) => {
+    const copy = normalizeExitTemplate({ ...source, id: "" });
+    copy.name = source.name + " copy";
+    setCurrent(copy);
+    setDirty(true);
   };
 
   const uploadPhotos = async (files: FileList | null) => {
@@ -239,7 +257,7 @@ export function ExitPageBuilder({ notify, links, refreshLinks }: { notify: (s: s
         <div className="pagebar">
           <div>
             <h2>Exit page builder</h2>
-            <p>Design custom exit pages per smart link — colors, photos, buttons.</p>
+            <p>Design exit page templates: content, buttons, colors and photo backgrounds.</p>
           </div>
           <button className="primary" onClick={createTemplate}>
             <Plus size={18} /> New template
@@ -249,12 +267,17 @@ export function ExitPageBuilder({ notify, links, refreshLinks }: { notify: (s: s
           {templates.map((t) => (
             <div className="templateitem" key={t.id}>
               <button className="templatename" onClick={() => void openTemplate(t.id)}>
-                <span>{t.name}</span>
+                <span>
+                  {t.name}
+                  {t.isDefault && <em className="tplbadge">default</em>}
+                </span>
                 <small>{t.usedBy ? `used by ${t.usedBy} link${t.usedBy > 1 ? "s" : ""}` : "unused"}</small>
               </button>
-              <button className="icon danger" title="Delete template" onClick={() => void deleteTemplate(t.id)}>
-                <Trash2 size={15} />
-              </button>
+              {!t.isDefault && (
+                <button className="icon danger" title="Delete template" onClick={() => void deleteTemplate(t.id)}>
+                  <Trash2 size={15} />
+                </button>
+              )}
             </div>
           ))}
           {!templates.length && (
@@ -266,184 +289,159 @@ export function ExitPageBuilder({ notify, links, refreshLinks }: { notify: (s: s
   }
 
   const t = current;
+  const isDefault = t.id === "default";
   return (
     <section className="content exitbuilder-workspace">
       <div className="pagebar">
         <div>
           <h2>Exit page builder</h2>
-          <p>{dirty ? "Unsaved changes" : "Editing template"}</p>
+          <p>{isDefault ? "Default template — used when a link has no template assigned" : (dirty ? "Unsaved changes" : "Editing template")}</p>
         </div>
         <div className="pagebaractions">
           <button onClick={() => { setCurrent(null); setDirty(false); }}>
-            <X size={16} /> All templates
+            <ChevronLeft size={16} /> Back
           </button>
-          <button className={"primary" + (dirty ? "" : " disabled")} onClick={() => void saveTemplate()} disabled={!dirty}>
-            <Save size={16} /> Save template
+          <button className="primary" onClick={() => void saveTemplate()} disabled={!dirty}>
+            <Save size={16} /> {dirty ? "Save" : "Saved"}
           </button>
         </div>
       </div>
       <div className="buildergrid">
         <div className="builderform">
-          <label>
-            Template name
-            <input
-              value={t.name}
-              onChange={(e) => patch({ name: e.target.value })}
-              placeholder="Summer promo 18+"
-              maxLength={60}
-            />
-          </label>
-          <div className="assignrow">
-            <button className="textbutton" onClick={() => setLinksMenu((v) => !v)}>
-              Assign to link →
-            </button>
-            {linksMenu && (
-              <div className="assignmenu card">
-                {links.map((l) => (
-                  <label key={l.id} className="assignitem">
-                    <input
-                      type="radio"
-                      name="assignlink"
-                      checked={Boolean(l.exitTemplateId && current.id && l.exitTemplateId === current.id)}
-                      onChange={() => current.id && void assignToLink(l.id, current.id)}
-                    />
-                    <span>{l.name}</span>
-                  </label>
-                ))}
-                {links
-                  .filter((l) => l.exitTemplateId === current.id)
-                  .map((l) => (
-                    <button
-                      key={"rm" + l.id}
-                      className="textbutton danger"
-                      onClick={() => void assignToLink(l.id, "")}
-                    >
-                      remove from {l.name}
-                    </button>
-                  ))}
-              </div>
-            )}
-          </div>
-
-          <div className="secttitle">
-            <span>CONTENT</span>
-          </div>
-          <label>
-            Heading
-            <input value={t.heading} onChange={(e) => patch({ heading: e.target.value })} maxLength={80} placeholder="Adults Only" />
-          </label>
-          <label>
-            Subtext
-            <textarea
-              value={t.subtext}
-              onChange={(e) => patch({ subtext: e.target.value })}
-              maxLength={300}
-              placeholder="This content is intended for adults…"
-            />
-          </label>
-          <div className="fieldrow">
+          <Section title="Template" defaultOpen>
             <label>
-              Badge
+              Name
               <input
-                value={t.badge.text}
-                onChange={(e) => patch({ badge: { ...t.badge, text: e.target.value } })}
-                maxLength={8}
-                placeholder="18+"
+                value={t.name}
+                onChange={(e) => patch({ name: e.target.value })}
+                placeholder="Summer promo 18+"
+                maxLength={60}
               />
             </label>
-            <label className="checkline">
-              <input
-                type="checkbox"
-                checked={t.badge.show}
-                onChange={(e) => patch({ badge: { ...t.badge, show: e.target.checked } })}
-              />
-              Show badge
-            </label>
-            <label className="checkline">
-              <input
-                type="checkbox"
-                checked={t.auto}
-                onChange={(e) => patch({ auto: e.target.checked })}
-              />
-              Auto-redirect
-            </label>
-          </div>
-          <label>
-            Auto-redirect delay (sec)
-            <input
-              type="number"
-              min={3}
-              step={1}
-              value={t.countdown}
-              onChange={(e) => patch({ countdown: Math.max(3, Number(e.target.value) || 3) })}
-            />
-          </label>
+            {isDefault && (
+              <small className="hint">
+                This is the default template. Edit it to change how every link without an
+                assigned template looks. It cannot be deleted.
+              </small>
+            )}
+          </Section>
 
-          <div className="secttitle">
-            <span>BUTTONS</span>
-          </div>
-          {t.buttons.map((button, index) => (
-            <div className="buttonrow" key={button.id}>
-              <input
-                value={button.label}
-                onChange={(e) => {
-                  const next = [...t.buttons];
-                  next[index] = { ...button, label: e.target.value };
-                  patch({ buttons: next });
-                }}
-                placeholder="Button label"
-                maxLength={40}
+          <Section title="Content" hint="Heading, text, badge, auto-redirect">
+            <label>
+              Heading
+              <input value={t.heading} onChange={(e) => patch({ heading: e.target.value })} maxLength={80} placeholder="Adults Only" />
+            </label>
+            <label>
+              Subtext
+              <textarea
+                value={t.subtext}
+                onChange={(e) => patch({ subtext: e.target.value })}
+                maxLength={300}
+                placeholder="This content is intended for adults…"
               />
-              <input
-                value={button.url}
-                onChange={(e) => {
-                  const next = [...t.buttons];
-                  next[index] = { ...button, url: e.target.value };
-                  patch({ buttons: next });
-                }}
-                placeholder="https:// (empty = continue action)"
-              />
-              <select
-                value={button.style}
-                onChange={(e) => {
-                  const next = [...t.buttons];
-                  next[index] = { ...button, style: e.target.value as ExitTemplate["buttons"][number]["style"] };
-                  patch({ buttons: next });
-                }}
-              >
-                <option value="solid">Solid</option>
-                <option value="outline">Outline</option>
-                <option value="ghost">Ghost</option>
-              </select>
-              <button
-                className="icon danger"
-                title="Remove button"
-                onClick={() => patch({ buttons: t.buttons.filter((x) => x.id !== button.id) })}
-              >
-                <X size={15} />
-              </button>
+            </label>
+            <div className="fieldrow">
+              <label>
+                Badge
+                <input
+                  value={t.badge.text}
+                  onChange={(e) => patch({ badge: { ...t.badge, text: e.target.value } })}
+                  maxLength={8}
+                  placeholder="18+"
+                />
+              </label>
+              <label className="checkline">
+                <input
+                  type="checkbox"
+                  checked={t.badge.show}
+                  onChange={(e) => patch({ badge: { ...t.badge, show: e.target.checked } })}
+                />
+                Show badge
+              </label>
             </div>
-          ))}
-          {t.buttons.length < 6 && (
-            <button
-              className="addblock"
-              onClick={() =>
-                patch({
-                  buttons: [
-                    ...t.buttons,
-                    { id: "b" + Date.now(), label: "New button", url: "", style: "ghost" },
-                  ],
-                })
-              }
-            >
-              <Plus size={16} /> Add button
-            </button>
-          )}
+            <div className="fieldrow">
+              <label className="checkline">
+                <input
+                  type="checkbox"
+                  checked={t.auto}
+                  onChange={(e) => patch({ auto: e.target.checked })}
+                />
+                Auto-redirect
+              </label>
+              <label>
+                Delay (sec)
+                <input
+                  type="number"
+                  min={3}
+                  step={1}
+                  value={t.countdown}
+                  onChange={(e) => patch({ countdown: Math.max(3, Number(e.target.value) || 3) })}
+                />
+              </label>
+            </div>
+          </Section>
 
-          <div className="secttitle">
-            <span>BACKGROUND</span>
-          </div>
-          <div className="fieldrow">
+          <Section title="Buttons" hint={`${t.buttons.length}/6 · one button without a link continues`}>
+            {t.buttons.map((button, index) => (
+              <div className="buttonrow" key={button.id}>
+                <input
+                  value={button.label}
+                  onChange={(e) => {
+                    const next = [...t.buttons];
+                    next[index] = { ...button, label: e.target.value };
+                    patch({ buttons: next });
+                  }}
+                  placeholder="Button label"
+                  maxLength={40}
+                />
+                <input
+                  value={button.url}
+                  onChange={(e) => {
+                    const next = [...t.buttons];
+                    next[index] = { ...button, url: e.target.value };
+                    patch({ buttons: next });
+                  }}
+                  placeholder="https:// (empty = continue action)"
+                />
+                <select
+                  value={button.style}
+                  onChange={(e) => {
+                    const next = [...t.buttons];
+                    next[index] = { ...button, style: e.target.value as ExitTemplate["buttons"][number]["style"] };
+                    patch({ buttons: next });
+                  }}
+                >
+                  <option value="solid">Solid</option>
+                  <option value="outline">Outline</option>
+                  <option value="ghost">Ghost</option>
+                </select>
+                <button
+                  className="icon danger"
+                  title="Remove button"
+                  onClick={() => patch({ buttons: t.buttons.filter((x) => x.id !== button.id) })}
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            ))}
+            {t.buttons.length < 6 && (
+              <button
+                className="addblock"
+                onClick={() =>
+                  patch({
+                    buttons: [
+                      ...t.buttons,
+                      { id: "b" + Date.now(), label: "New button", url: "", style: "ghost" },
+                    ],
+                  })
+                }
+              >
+                <Plus size={16} /> Add button
+              </button>
+            )}
+          </Section>
+
+          <Section title="Background" hint="Solid color or photos with blur and dim">
             <label>
               Type
               <select
@@ -454,140 +452,146 @@ export function ExitPageBuilder({ notify, links, refreshLinks }: { notify: (s: s
                 <option value="photo">Photo</option>
               </select>
             </label>
-            <label className="sliderline">
-              Blur
-              <input
-                type="range"
-                min={0}
-                max={40}
-                value={t.background.blur}
-                onChange={(e) => patch({ background: { ...t.background, blur: Number(e.target.value) } })}
-              />
-              <code>{t.background.blur}px</code>
-            </label>
-            <label className="sliderline">
-              Dim
-              <input
-                type="range"
-                min={0}
-                max={90}
-                value={t.background.dim}
-                onChange={(e) => patch({ background: { ...t.background, dim: Number(e.target.value) } })}
-              />
-              <code>{t.background.dim}%</code>
-            </label>
-          </div>
-          {t.background.type === "photo" && (
-            <div className="photomanage">
-              <div className="photothumbs">
-                {t.background.photos.map((photo) => (
-                  <div className="photothumb" key={photo}>
-                    <img src={"/exitmedia/" + photo} alt={photo} />
-                    <button
-                      className="icon danger"
-                      title="Remove photo"
-                      onClick={() =>
-                        patch({
-                          background: {
-                            ...t.background,
-                            photos: t.background.photos.filter((x) => x !== photo),
-                          },
-                        })
-                      }
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
-                ))}
-                <button className="photoupload" onClick={() => fileRef.current?.click()} disabled={uploading}>
-                  <Upload size={17} />
-                  <span>{uploading ? "Uploading…" : "Upload"}</span>
-                </button>
+            {t.background.type === "photo" && (
+              <div className="photomanage">
+                <div className="photothumbs">
+                  {t.background.photos.map((photo) => (
+                    <div className="photothumb" key={photo}>
+                      <img src={"/exitmedia/" + photo} alt={photo} />
+                      <button
+                        className="icon danger"
+                        title="Remove photo"
+                        onClick={() =>
+                          patch({
+                            background: {
+                              ...t.background,
+                              photos: t.background.photos.filter((x) => x !== photo),
+                            },
+                          })
+                        }
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ))}
+                  <button className="photoupload" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                    <Upload size={17} />
+                    <span>{uploading ? "Uploading…" : "Upload"}</span>
+                  </button>
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
+                  hidden
+                  onChange={(e) => void uploadPhotos(e.target.files)}
+                />
+                {t.background.photos.length > 1 && (
+                  <label className="checkline">
+                    <input
+                      type="checkbox"
+                      checked={t.background.slideshow}
+                      onChange={(e) => patch({ background: { ...t.background, slideshow: e.target.checked } })}
+                    />
+                    Slideshow
+                  </label>
+                )}
+                {t.background.slideshow && t.background.photos.length > 1 && (
+                  <label className="sliderline">
+                    Interval (sec)
+                    <input
+                      type="range"
+                      min={3}
+                      max={30}
+                      value={t.background.interval}
+                      onChange={(e) => patch({ background: { ...t.background, interval: Number(e.target.value) } })}
+                    />
+                    <code>{t.background.interval}s</code>
+                  </label>
+                )}
+                <small className="hint">Up to 6 photos, 8 MB each.</small>
               </div>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                multiple
-                hidden
-                onChange={(e) => void uploadPhotos(e.target.files)}
-              />
-              {t.background.photos.length > 1 && (
-                <label className="checkline">
-                  <input
-                    type="checkbox"
-                    checked={t.background.slideshow}
-                    onChange={(e) => patch({ background: { ...t.background, slideshow: e.target.checked } })}
-                  />
-                  Slideshow
-                </label>
-              )}
-              {t.background.slideshow && t.background.photos.length > 1 && (
-                <label className="sliderline">
-                  Interval (sec)
-                  <input
-                    type="range"
-                    min={3}
-                    max={30}
-                    value={t.background.interval}
-                    onChange={(e) => patch({ background: { ...t.background, interval: Number(e.target.value) } })}
-                  />
-                  <code>{t.background.interval}s</code>
-                </label>
-              )}
-              <small className="hint">First button without a link continues to the destination. Photos: up to 6, max 8 MB each.</small>
+            )}
+            <div className="fieldrow">
+              <label className="sliderline">
+                Blur
+                <input
+                  type="range"
+                  min={0}
+                  max={40}
+                  value={t.background.blur}
+                  onChange={(e) => patch({ background: { ...t.background, blur: Number(e.target.value) } })}
+                />
+                <code>{t.background.blur}px</code>
+              </label>
+              <label className="sliderline">
+                Dim
+                <input
+                  type="range"
+                  min={0}
+                  max={90}
+                  value={t.background.dim}
+                  onChange={(e) => patch({ background: { ...t.background, dim: Number(e.target.value) } })}
+                />
+                <code>{t.background.dim}%</code>
+              </label>
             </div>
+          </Section>
+
+          <Section title="Colors" hint="Palette and corner radius">
+            <div className="palettegrid">
+              {PALETTE_FIELDS.map(([key, label]) => (
+                <ColorField
+                  key={key}
+                  label={label}
+                  value={t.palette[key] as string}
+                  onChange={(hex) => patchPalette(key, hex)}
+                />
+              ))}
+              <label className="sliderline">
+                Corner radius
+                <input
+                  type="range"
+                  min={0}
+                  max={28}
+                  value={t.palette.radius}
+                  onChange={(e) => patchPalette("radius", Number(e.target.value))}
+                />
+                <code>{t.palette.radius}px</code>
+              </label>
+            </div>
+          </Section>
+
+          <Section title="Card" hint="Panel behind the content">
+            <div className="fieldrow">
+              <label className="checkline">
+                <input
+                  type="checkbox"
+                  checked={t.card.visible}
+                  onChange={(e) => patch({ card: { ...t.card, visible: e.target.checked } })}
+                />
+                Show card panel
+              </label>
+              <label className="sliderline">
+                Card opacity
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={t.card.opacity}
+                  onChange={(e) => patch({ card: { ...t.card, opacity: Number(e.target.value) } })}
+                />
+                <code>{t.card.opacity}%</code>
+              </label>
+            </div>
+          </Section>
+
+          {!isDefault && (
+            <button className="textbutton" onClick={() => void duplicateTemplate(t)}>
+              Duplicate as new template
+            </button>
           )}
-
-          <div className="secttitle">
-            <span>PALETTE</span>
-          </div>
-          <div className="palettegrid">
-            {PALETTE_FIELDS.map(([key, label]) => (
-              <ColorField
-                key={key}
-                label={label}
-                value={t.palette[key] as string}
-                onChange={(hex) => patchPalette(key, hex)}
-              />
-            ))}
-            <label className="sliderline">
-              Corner radius
-              <input
-                type="range"
-                min={0}
-                max={28}
-                value={t.palette.radius}
-                onChange={(e) => patchPalette("radius", Number(e.target.value))}
-              />
-              <code>{t.palette.radius}px</code>
-            </label>
-          </div>
-
-          <div className="secttitle">
-            <span>CARD</span>
-          </div>
-          <div className="fieldrow">
-            <label className="checkline">
-              <input
-                type="checkbox"
-                checked={t.card.visible}
-                onChange={(e) => patch({ card: { ...t.card, visible: e.target.checked } })}
-              />
-              Show card panel
-            </label>
-            <label className="sliderline">
-              Card opacity
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={t.card.opacity}
-                onChange={(e) => patch({ card: { ...t.card, opacity: Number(e.target.value) } })}
-              />
-              <code>{t.card.opacity}%</code>
-            </label>
-          </div>
         </div>
 
         <div className="builderpreview">
