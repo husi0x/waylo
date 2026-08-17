@@ -56,6 +56,8 @@ export function normalizeExitTemplate(raw = {}) {
   return {
     id: typeof raw.id === 'string' && raw.id.length <= 64 ? raw.id : '',
     name: str(raw.name, 60, 'Untitled template'),
+    mode: raw.mode === 'app' ? 'app' : 'browser',
+    scheme: typeof raw.scheme === 'string' ? raw.scheme.trim().slice(0, 120) : '',
     palette: {
       bg: color(palette.bg, '#08090b'),
       card: color(palette.card, '#121214'),

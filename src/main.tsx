@@ -45,7 +45,8 @@ import {
 } from "recharts";
 import { EXIT_PAGE_DEFAULTS, isValidCountdownInput, normalizeCountdown, withExitPageDefaults } from "../exit-page-config.mjs";
 import { ExitPagePreview } from "./ExitPagePreview";
-import { ExitPageBuilder } from "./ExitPageBuilder";
+import { ExitPageBuilder, TemplatePreview } from "./ExitPageBuilder";
+import { defaultExitTemplate, normalizeExitTemplate, type ExitTemplate } from "../exit-template.mjs";
 import "./styles.css";
 type RouteRule = {
   id: string;
@@ -2312,6 +2313,25 @@ function SettingsPage() {
     </section>
   );
 }
+function TemplatePreviewCard({
+  templateId,
+  templates,
+}: {
+  templateId: string;
+  templates: ExitTemplate[];
+}) {
+  const selected =
+    templates.find((t) => t.id === templateId) ||
+    templates.find((t) => t.id === "default") ||
+    defaultExitTemplate();
+  return (
+    <div className="tplpreviewcard">
+      <span className="tplpreviewlabel">{templateId ? "Template preview" : "Default template preview"}</span>
+      <TemplatePreview t={normalizeExitTemplate(selected)} phone={false} />
+    </div>
+  );
+}
+
 function LinkModal({
   domains,
   initial,
@@ -2326,23 +2346,13 @@ function LinkModal({
   done: () => void;
 }) {
   const isEdit = !!initial;
-  const exitPage = withExitPageDefaults({ ...(initial || {}) });
   const [landingOn, setLandingOn] = useState(Boolean(initial?.landing));
-  const [mode, setMode] = useState(exitPage.mode);
-  const [landingHeading, setLandingHeading] = useState(exitPage.heading);
-  const [landingSubtext, setLandingSubtext] = useState(exitPage.subtext);
-  const [landingButton, setLandingButton] = useState(exitPage.button);
-  const [landingCustomLabel, setLandingCustomLabel] = useState(exitPage.customLabel);
-  const [landingCustomUrl, setLandingCustomUrl] = useState(exitPage.customUrl);
-  const [landingCountdown, setLandingCountdown] = useState(String(exitPage.countdown));
-  const [countdownError, setCountdownError] = useState("");
-  const [customButtonError, setCustomButtonError] = useState("");
-  const [exitTemplates, setExitTemplates] = useState<{ id: string; name: string; usedBy: number }[]>([]);
+  const [exitTemplates, setExitTemplates] = useState<ExitTemplate[]>([]);
   const [exitTemplateId, setExitTemplateId] = useState<string>(initial?.exitTemplateId || "");
   useEffect(() => {
-    fetch("/api/exit-templates")
-      .then((r) => (r.ok ? r.json() : []))
-      .then(setExitTemplates)
+    fetch("/api/state")
+      .then((r) => (r.ok ? r.json() : { exitTemplates: [] }))
+      .then((s) => setExitTemplates(s.exitTemplates || []))
       .catch(() => {});
   }, []);
   const available = domains.filter((d) => d.status === "active");
@@ -2358,39 +2368,7 @@ function LinkModal({
       body.slug = f.get("slug");
       body.domain = f.get("domain");
     }
-    if (landingOn) {
-      if (!isValidCountdownInput(landingCountdown)) {
-        setCountdownError(`Auto-redirect must be at least ${EXIT_PAGE_DEFAULTS.countdown} seconds.`);
-        return;
-      }
-      const customLabel = landingCustomLabel.trim();
-      const customUrl = landingCustomUrl.trim();
-      if (Boolean(customLabel) !== Boolean(customUrl)) {
-        setCustomButtonError("Enter both a button name and an HTTPS link, or leave both empty.");
-        return;
-      }
-      if (customUrl) {
-        try {
-          const parsed = new URL(customUrl);
-          if (parsed.protocol !== "https:") throw new Error("invalid protocol");
-        } catch {
-          setCustomButtonError("Custom button link must be a valid HTTPS URL.");
-          return;
-        }
-      }
-      setCustomButtonError("");
-      body.landing = true;
-      body.landingMode = mode;
-      if (mode === "app") body.landingScheme = f.get("landingScheme") || "";
-      body.landingHeading = landingHeading;
-      body.landingSubtext = landingSubtext;
-      body.landingButton = landingButton;
-      body.landingCustomLabel = customLabel;
-      body.landingCustomUrl = customUrl;
-      body.landingCountdown = normalizeCountdown(landingCountdown);
-    } else {
-      body.landing = false;
-    }
+    body.landing = Boolean(landingOn);
     body.exitTemplateId = exitTemplateId || null;
     if (bulk && !isEdit) {
       body.prefix = String(f.get("slug") || "")
@@ -2556,7 +2534,6 @@ function LinkModal({
                 {exitTemplates.map((tpl) => (
                   <option key={tpl.id} value={tpl.id}>
                     {tpl.name}
-                    {tpl.usedBy ? ` · ${tpl.usedBy} link${tpl.usedBy > 1 ? "s" : ""}` : ""}
                   </option>
                 ))}
               </select>
@@ -2564,133 +2541,7 @@ function LinkModal({
           )}
           {landingOn && (
             <div className="landingbox">
-              <label>
-                Mode
-                <select
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value === "app" ? "app" : "browser")}
-                >
-                  <option value="browser">Open in external browser</option>
-                  <option value="app">Deep link into an app</option>
-                </select>
-              </label>
-              {mode === "app" && (
-                <label>
-                  App deep link
-                  <input
-                    name="landingScheme"
-                    defaultValue={initial?.landingScheme || ""}
-                    placeholder="onlyfans://username"
-                  />
-                  <span className="hint">
-                    Custom URL scheme (e.g. onlyfans://user). Opens the app when
-                    installed, falls back to the destination otherwise.
-                  </span>
-                </label>
-              )}
-              <div className="fieldrow">
-                <label>
-                  Heading
-                  <input
-                    name="landingHeading"
-                    value={landingHeading}
-                    onChange={(e) => setLandingHeading(e.target.value)}
-                    placeholder={EXIT_PAGE_DEFAULTS.heading}
-                    maxLength={80}
-                  />
-                </label>
-                <label>
-                  Auto-redirect (sec)
-                  <input
-                    name="landingCountdown"
-                    type="number"
-                    min={3}
-                    step={1}
-                    value={landingCountdown}
-                    onChange={(e) => {
-                      setLandingCountdown(e.target.value);
-                      setCountdownError(isValidCountdownInput(e.target.value) ? "" : "Auto-redirect must be at least 3 seconds.");
-                    }}
-                    onBlur={() => {
-                      if (!isValidCountdownInput(landingCountdown)) {
-                        setCountdownError("Auto-redirect must be at least 3 seconds.");
-                        return;
-                      }
-                      setLandingCountdown(String(normalizeCountdown(landingCountdown)));
-                      setCountdownError("");
-                    }}
-                    aria-invalid={Boolean(countdownError)}
-                    aria-describedby={countdownError ? "landing-countdown-error" : undefined}
-                  />
-                  {countdownError && <span className="field-error" id="landing-countdown-error">{countdownError}</span>}
-                </label>
-              </div>
-              <label>
-                Subtext
-                <input
-                  name="landingSubtext"
-                  value={landingSubtext}
-                  onChange={(e) => setLandingSubtext(e.target.value)}
-                  placeholder={EXIT_PAGE_DEFAULTS.subtext}
-                  maxLength={220}
-                />
-              </label>
-              <label>
-                Primary button label
-                <input
-                  name="landingButton"
-                  value={landingButton}
-                  onChange={(e) => setLandingButton(e.target.value)}
-                  placeholder={EXIT_PAGE_DEFAULTS.button}
-                  maxLength={40}
-                />
-              </label>
-              <div className="customactionfields">
-                <div className="customactiontitle">
-                  <b>Custom fallback button</b>
-                  <small>Optional. Shown if the automatic handoff does not open.</small>
-                </div>
-                <div className="fieldrow2">
-                  <label>
-                    Button name
-                    <input
-                      name="landingCustomLabel"
-                      value={landingCustomLabel}
-                      onChange={(e) => {
-                        setLandingCustomLabel(e.target.value);
-                        setCustomButtonError("");
-                      }}
-                      placeholder="Contact support"
-                      maxLength={40}
-                      required={Boolean(landingCustomUrl.trim())}
-                    />
-                  </label>
-                  <label>
-                    Button link
-                    <input
-                      name="landingCustomUrl"
-                      type="url"
-                      value={landingCustomUrl}
-                      onChange={(e) => {
-                        setLandingCustomUrl(e.target.value);
-                        setCustomButtonError("");
-                      }}
-                      placeholder="https://example.com/support"
-                      maxLength={500}
-                      required={Boolean(landingCustomLabel.trim())}
-                    />
-                  </label>
-                </div>
-                {customButtonError && <span className="field-error">{customButtonError}</span>}
-              </div>
-              <ExitPagePreview
-                heading={landingHeading}
-                subtext={landingSubtext}
-                button={landingButton}
-                customLabel={landingCustomLabel}
-                customUrl={landingCustomUrl}
-                countdown={landingCountdown}
-              />
+              <TemplatePreviewCard templateId={exitTemplateId} templates={exitTemplates} />
             </div>
           )}
         </div>

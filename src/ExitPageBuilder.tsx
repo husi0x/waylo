@@ -29,7 +29,7 @@ function hexA(hex: string, opacityPercent: number) {
 }
 
 /** Live preview — mirrors renderExitTemplatePage output structure. */
-function TemplatePreview({ t, phone }: { t: ExitTemplate; phone?: boolean }) {
+export function TemplatePreview({ t, phone }: { t: ExitTemplate; phone?: boolean }) {
   const [slide, setSlide] = useState(0);
   useEffect(() => {
     if (t.background.photos.length < 2 || !t.background.slideshow) return;
@@ -298,7 +298,7 @@ export function ExitPageBuilder({ notify }: { notify: (s: string) => void }) {
           <p>{isDefault ? "Default template — used when a link has no template assigned" : (dirty ? "Unsaved changes" : "Editing template")}</p>
         </div>
         <div className="pagebaractions">
-          <button onClick={() => { setCurrent(null); setDirty(false); }}>
+          <button className="backbtn" onClick={() => { setCurrent(null); setDirty(false); }}>
             <ChevronLeft size={16} /> Back
           </button>
           <button className="primary" onClick={() => void saveTemplate()} disabled={!dirty}>
@@ -318,6 +318,28 @@ export function ExitPageBuilder({ notify }: { notify: (s: string) => void }) {
                 maxLength={60}
               />
             </label>
+            <label>
+              Opening mode
+              <select
+                value={t.mode}
+                onChange={(e) => patch({ mode: e.target.value as "browser" | "app" })}
+              >
+                <option value="browser">Open in external browser</option>
+                <option value="app">Deep link into an app</option>
+              </select>
+            </label>
+            {t.mode === "app" && (
+              <label>
+                App deep link scheme
+                <input
+                  value={t.scheme}
+                  onChange={(e) => patch({ scheme: e.target.value })}
+                  placeholder="onlyfans://user"
+                  maxLength={120}
+                />
+                <small className="hint">Custom URL scheme (e.g. onlyfans://user).</small>
+              </label>
+            )}
             {isDefault && (
               <small className="hint">
                 This is the default template. Edit it to change how every link without an
@@ -340,7 +362,7 @@ export function ExitPageBuilder({ notify }: { notify: (s: string) => void }) {
                 placeholder="This content is intended for adults…"
               />
             </label>
-            <div className="fieldrow">
+            <div className="fieldrow fieldrow4">
               <label>
                 Badge
                 <input
@@ -358,8 +380,6 @@ export function ExitPageBuilder({ notify }: { notify: (s: string) => void }) {
                 />
                 Show badge
               </label>
-            </div>
-            <div className="fieldrow">
               <label className="checkline">
                 <input
                   type="checkbox"

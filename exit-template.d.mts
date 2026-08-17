@@ -7,6 +7,8 @@ export type ExitTemplateButton = {
 export type ExitTemplate = {
   id: string;
   name: string;
+  mode: 'browser' | 'app';
+  scheme: string;
   palette: {
     bg: string;
     card: string;
