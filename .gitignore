@@ -15,3 +15,6 @@ storage/
 coverage/
 tracker/
 waylo/
+
+# local agent instructions (not for public repo)
+AGENTS.md

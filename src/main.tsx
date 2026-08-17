@@ -100,6 +100,7 @@ type ClickEvent = {
   id: string;
   link_id: string;
   route_id: string | null;
+  visitor_id: string;
   country: string;
   region: string;
   city: string;
@@ -647,10 +648,17 @@ function CountryMultiSelect({
   traffic?: Map<string, number>;
 }) {
   const [search, setSearch] = useState("");
-  const [openTier, setOpenTier] = useState<string | null>("Tier 1");
+  const [openTiers, setOpenTiers] = useState<Set<string>>(new Set(["Tier 1"]));
   const anyMode = value.includes("ANY");
   const setAny = (on: boolean) => onChange(on ? ["ANY"] : []);
-  const toggle = (code: string) => {
+  const toggleTierOpen = (tier: string) => {
+    setOpenTiers((prev) => {
+      const next = new Set(prev);
+      if (next.has(tier)) next.delete(tier);
+      else next.add(tier);
+      return next;
+    });
+  };  const toggle = (code: string) => {
     if (anyMode) return onChange([code]);
     onChange(value.includes(code) ? value.filter((c) => c !== code) : [...value, code]);
   };
@@ -672,7 +680,7 @@ function CountryMultiSelect({
     if (!list.length) return null;
     const allSelected = codes.length > 0 && codes.every((c) => value.includes(c));
     const selectedCount = codes.filter((c) => value.includes(c)).length;
-    const open = openTier === tier;
+    const open = openTiers.has(tier);
     const badge = allSelected
       ? `All ${codes.length}`
       : selectedCount > 0
@@ -696,7 +704,7 @@ function CountryMultiSelect({
           <button
             type="button"
             className="tierchevron"
-            onClick={() => setOpenTier(open ? null : tier)}
+            onClick={() => toggleTierOpen(tier)}
             title={open ? "Collapse" : "Expand"}
             aria-label={open ? `Collapse ${tier}` : `Expand ${tier}`}
           >
@@ -1406,6 +1414,7 @@ function Analytics({
   const [appliedQuery, setAppliedQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [pages, setPages] = useState(1);
 
   const paramsFor = (requestedPage = page, pageSize = 25) => {
     const params = new URLSearchParams({
@@ -1522,7 +1531,6 @@ function Analytics({
     stats?.timeline ||
     (stats?.daily || []).map((item) => ({ bucket: item.day, ...item }));
   const total = stats?.summary.clicks || 0;
-  const pages = stats?.pagination?.pages || 1;
   const periodLabel =
     period === "day"
       ? "Last 24 hours"
@@ -1781,7 +1789,7 @@ function Analytics({
           <div className="tabletools">
             <div>
               <h3>Visit log</h3>
-              <span>Raw redirect events</span>
+              <span>One row per visitor — click a row for full details</span>
             </div>
             <div className="visitactions">
               <button onClick={() => void exportCsv()}>Export CSV</button>
@@ -1792,7 +1800,16 @@ function Analytics({
               />
             </div>
           </div>
-          <RecentClicks analytics={stats} links={data.links} />
+          <VisitorsTable
+            period={period}
+            linkId={linkId}
+            query={appliedQuery}
+            page={page}
+            pageSize={25}
+            links={data.links}
+            loading={loading}
+            onPages={setPages}
+          />
           <div className="pagination">
             <button
               disabled={page <= 1 || loading}
@@ -1816,6 +1833,193 @@ function Analytics({
   );
 }
 
+type VisitorApiResponse = {
+  period: string;
+  visitors: {
+    visitor_id: string;
+    first_seen: string;
+    last_seen: string;
+    events: number;
+    links: number;
+    exit_clicks: number;
+    exit_click_at: string | null;
+    route_clicks: number;
+    events_detail: ClickEvent[];
+  }[];
+  pagination: { page: number; pageSize: number; total: number; pages: number };
+};
+function VisitorsTable({
+  period,
+  linkId,
+  query,
+  page,
+  pageSize,
+  links,
+  loading,
+  onPages,
+}: {
+  period: AnalyticsPeriod;
+  linkId: string;
+  query: string;
+  page: number;
+  pageSize: number;
+  links: Link[];
+  loading: boolean;
+  onPages: (pages: number) => void;
+}) {
+  const [data, setData] = useState<VisitorApiResponse | null>(null);
+  const [detail, setDetail] = useState<VisitorApiResponse["visitors"][number] | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    const params = new URLSearchParams({
+      period,
+      page: String(page),
+      pageSize: String(pageSize),
+      visitors: "1",
+    });
+    if (linkId) params.set("linkId", linkId);
+    if (query) params.set("q", query);
+    fetch("/api/analytics?" + params.toString(), { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok)
+          throw Error(
+            (await response.json().catch(() => null))?.error || "Visitors request failed",
+          );
+        return response.json();
+      })
+      .then((body: VisitorApiResponse) => {
+        setData(body);
+        onPages(body.pagination?.pages || 1);
+      })
+      .catch((requestError) => {
+        if (requestError.name !== "AbortError") setError(requestError.message);
+      });
+    return () => controller.abort();
+  }, [period, linkId, page, pageSize, query]);
+  const rows = data?.visitors || [];
+  return (
+    <div className={"card clicktable" + (loading ? " loadingdata" : "")}>
+      {error && <div className="analyticserror">{error}</div>}
+      <table>
+        <thead>
+          <tr>
+            <th>VISITOR</th>
+            <th>ARRIVED</th>
+            <th>LINKS</th>
+            <th>LAST SOURCE</th>
+            <th>GEO</th>
+            <th>DEVICE / OS</th>
+            <th>EXIT PAGE</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((v) => {
+            const latest = v.events_detail[0] || null;
+            const first = v.events_detail[v.events_detail.length - 1] || latest;
+            const linkNames = v.events_detail
+              .map((e) => links.find((l) => l.id === e.link_id)?.name)
+              .filter((x, i, arr) => x && arr.indexOf(x) === i)
+              .slice(0, 2);
+            return (
+              <tr
+                key={v.visitor_id}
+                className="visitorrow"
+                onClick={() => setDetail(v)}
+                title="Click for visitor details"
+              >
+                <td>
+                  <b className="visitorid">
+                    <Users size={13} /> {v.visitor_id.slice(0, 8)}
+                  </b>
+                  <small>
+                    {v.events} event{v.events > 1 ? "s" : ""}
+                  </small>
+                </td>
+                <td>
+                  <b>{new Date(v.first_seen).toLocaleDateString()}</b>
+                  <small>{new Date(v.first_seen).toLocaleTimeString()}</small>
+                </td>
+                <td>
+                  <b>{linkNames[0] || "Deleted link"}</b>
+                  {v.links > 1 && <small>+{v.links - 1} more link{v.links - 1 > 1 ? "s" : ""}</small>}
+                  {v.links === 1 && first && (
+                    <small>/{links.find((l) => l.id === first.link_id)?.slug || first.link_id}</small>
+                  )}
+                </td>
+                <td>
+                  <b>{latest?.source || "—"}</b>
+                  <small title={latest?.referrer || ""}>{latest?.referrer || ""}</small>
+                </td>
+                <td className="iconcell">
+                  <span className="tableicon countryflagwrap">
+                    <CountryFlag code={latest?.country || "Unknown"} size={21} />
+                  </span>
+                  <span>
+                    <b>
+                      {latest
+                        ? [latest.city, latest.region]
+                            .filter((x) => x && x !== "Unknown")
+                            .join(", ") || latest.country || "Unknown"
+                        : "Unknown"}
+                    </b>
+                    <small>{latest?.country || "Unknown"}</small>
+                  </span>
+                </td>
+                <td className="iconcell">
+                  <span className="tableicon">
+                    <DeviceIcon device={latest?.device || ""} os={latest?.os || ""} />
+                  </span>
+                  <span>
+                    <b>{latest?.device || "—"} · {latest?.os || "—"}</b>
+                    <small>{latest?.device_model || ""} · {latest?.browser || ""}</small>
+                  </span>
+                </td>
+                <td>
+                  {v.exit_clicks > 0 ? (
+                    <span className="pill active exitclicked">
+                      <Zap size={11} /> Clicked
+                    </span>
+                  ) : (
+                    <span className="pill pending">No tap</span>
+                  )}
+                  {v.exit_click_at && (
+                    <small>{new Date(v.exit_click_at).toLocaleTimeString()}</small>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+          {!rows.length && !error && (
+            <tr>
+              <td colSpan={7}>
+                <div className="emptyrows">
+                  <MousePointer2 />
+                  <b>No visitors in this period</b>
+                  <span>Open a smart link to record the first visit.</span>
+                </div>
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      {detail && (
+        <VisitorDetailModal
+          visitor={{
+            visitor_id: detail.visitor_id,
+            events: detail.events_detail,
+            firstEvent: detail.events_detail[detail.events_detail.length - 1],
+            lastEvent: detail.events_detail[0],
+            exitClicked: detail.exit_clicks > 0,
+            exitClickedAt: detail.exit_click_at,
+          }}
+          links={links}
+          close={() => setDetail(null)}
+        />
+      )}
+    </div>
+  );
+}
 function RecentClicks({
   analytics,
   links,
@@ -1826,86 +2030,94 @@ function RecentClicks({
   limit?: number;
 }) {
   const events = (analytics?.events || []).slice(0, limit);
+  const [visitorDetail, setVisitorDetail] = useState<VisitorRow | null>(null);
+  const visitors = groupEventsByVisitor(events, links);
   return (
+    <>
     <div className="card clicktable">
       <table>
         <thead>
           <tr>
-            <th>TIME</th>
+            <th>VISITOR</th>
+            <th>ARRIVED</th>
             <th>LINK / ROUTE</th>
             <th>SOURCE / REFERRER</th>
             <th>GEO</th>
             <th>DEVICE / OS</th>
-            <th>DESTINATION</th>
+            <th>EXIT PAGE</th>
           </tr>
         </thead>
         <tbody>
-          {events.map((e) => {
-            const link = links.find((l) => l.id === e.link_id);
+          {visitors.map((v) => {
+            const link = links.find((l) => l.id === v.firstEvent.link_id);
             return (
-              <tr key={e.id}>
+              <tr key={v.visitor_id} className="visitorrow" onClick={() => setVisitorDetail(v)} title="Click for visitor details">
                 <td>
-                  <b>{new Date(e.created_at).toLocaleDateString()}</b>
-                  <small>{new Date(e.created_at).toLocaleTimeString()}</small>
+                  <b className="visitorid">
+                    <Users size={13} /> {v.visitor_id.slice(0, 8)}
+                  </b>
+                  <small>{v.events.length > 1 ? `${v.events.length} events` : "1 event"}</small>
+                </td>
+                <td>
+                  <b>{new Date(v.firstEvent.created_at).toLocaleDateString()}</b>
+                  <small>{new Date(v.firstEvent.created_at).toLocaleTimeString()}</small>
                 </td>
                 <td>
                   <b>{link?.name || "Deleted link"}</b>
                   <small>
-                    /{link?.slug || e.link_id} ·{" "}
-                    {e.event_type === "exit_click"
-                      ? "exit page click"
-                      : e.route_id
-                        ? "smart rule"
-                        : "default route"}
+                    /{link?.slug || v.firstEvent.link_id} ·{" "}
+                    {v.firstEvent.route_id
+                      ? "smart rule"
+                      : "default route"}
                   </small>
                 </td>
                 <td>
-                  <b>{e.source}</b>
-                  <small title={e.referrer}>{e.referrer}</small>
+                  <b>{v.firstEvent.source}</b>
+                  <small title={v.firstEvent.referrer}>{v.firstEvent.referrer}</small>
                 </td>
                 <td className="iconcell">
                   <span className="tableicon countryflagwrap">
-                    <CountryFlag code={e.country} size={21} />
+                    <CountryFlag code={v.firstEvent.country} size={21} />
                   </span>
                   <span>
                     <b>
-                      {[e.city, e.region]
+                      {[v.firstEvent.city, v.firstEvent.region]
                         .filter((x) => x && x !== "Unknown")
-                        .join(", ") || e.country || "Unknown"}
+                        .join(", ") || v.firstEvent.country || "Unknown"}
                     </b>
-                    <small>{e.country || "Unknown"}</small>
+                    <small>{v.firstEvent.country || "Unknown"}</small>
                   </span>
                 </td>
                 <td className="iconcell">
                   <span className="tableicon">
-                    <DeviceIcon device={e.device} os={e.os} />
+                    <DeviceIcon device={v.firstEvent.device} os={v.firstEvent.os} />
                   </span>
                   <span>
-                    <b>{e.device} · {e.os}</b>
-                    <small>{e.device_model} · {e.browser}</small>
+                    <b>{v.firstEvent.device} · {v.firstEvent.os}</b>
+                    <small>{v.firstEvent.device_model} · {v.firstEvent.browser}</small>
                   </span>
                 </td>
                 <td>
-                  <b className="destination" title={e.destination}>
-                    {e.destination}
-                  </b>
-                  <small>
-                    {e.event_type === "exit_click"
-                      ? "Exit page tap"
-                      : e.route_id
-                        ? "Rule destination"
-                        : "Default destination"}
-                  </small>
+                  {v.exitClicked ? (
+                    <span className="pill active exitclicked">
+                      <Zap size={11} /> Clicked
+                    </span>
+                  ) : (
+                    <span className="pill pending">No tap</span>
+                  )}
+                  {v.exitClickedAt && (
+                    <small>{new Date(v.exitClickedAt).toLocaleTimeString()}</small>
+                  )}
                 </td>
               </tr>
             );
           })}
-          {!events.length && (
+          {!visitors.length && (
             <tr>
-              <td colSpan={6}>
+              <td colSpan={7}>
                 <div className="emptyrows">
                   <MousePointer2 />
-                  <b>No click events yet</b>
+                  <b>No visitors yet</b>
                   <span>Use a live smart link to record the first visit.</span>
                 </div>
               </td>
@@ -1913,6 +2125,144 @@ function RecentClicks({
           )}
         </tbody>
       </table>
+      {visitorDetail && (
+        <VisitorDetailModal
+          visitor={visitorDetail}
+          links={links}
+          close={() => setVisitorDetail(null)}
+        />
+      )}
+    </div>
+    </>
+  );
+}
+type VisitorRow = {
+  visitor_id: string;
+  events: ClickEvent[];
+  firstEvent: ClickEvent;
+  lastEvent: ClickEvent;
+  exitClicked: boolean;
+  exitClickedAt: string | null;
+};
+function groupEventsByVisitor(events: ClickEvent[], _links: Link[]): VisitorRow[] {
+  const groups = new Map<string, ClickEvent[]>();
+  for (const e of events) {
+    const list = groups.get(e.visitor_id) || [];
+    list.push(e);
+    groups.set(e.visitor_id, list);
+  }
+  const rows: VisitorRow[] = [];
+  for (const [visitor_id, list] of groups) {
+    const sorted = [...list].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+    const exitEvent = sorted.find((e) => e.event_type === "exit_click");
+    rows.push({
+      visitor_id,
+      events: sorted,
+      firstEvent: sorted[sorted.length - 1],
+      lastEvent: sorted[0],
+      exitClicked: Boolean(exitEvent),
+      exitClickedAt: exitEvent?.created_at || null,
+    });
+  }
+  return rows.sort(
+    (a, b) => new Date(b.firstEvent.created_at).getTime() - new Date(a.firstEvent.created_at).getTime(),
+  );
+}
+function VisitorDetailModal({
+  visitor,
+  links,
+  close,
+}: {
+  visitor: VisitorRow;
+  links: Link[];
+  close: () => void;
+}) {
+  const linkName = (id: string) => links.find((l) => l.id === id)?.name || "Deleted link";
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && close()}>
+      <div className="modal visitormodal">
+        <div className="modalheader">
+          <span>
+            <h2>Visitor {visitor.visitor_id.slice(0, 8)}</h2>
+            <p>
+              {visitor.events.length} event{visitor.events.length > 1 ? "s" : ""} ·{" "}
+              {visitor.exitClicked ? "clicked exit page button" : "no exit page tap recorded"}
+            </p>
+          </span>
+          <button type="button" className="icon modalclose" onClick={close} aria-label="Close modal">
+            <X size={17} />
+          </button>
+        </div>
+        <div className="visitorsummary">
+          <div>
+            <span>First seen</span>
+            <b>{new Date(visitor.firstEvent.created_at).toLocaleString()}</b>
+          </div>
+          <div>
+            <span>Last event</span>
+            <b>{new Date(visitor.lastEvent.created_at).toLocaleString()}</b>
+          </div>
+          <div>
+            <span>Exit page</span>
+            <b>{visitor.exitClicked ? "Clicked" : "No tap"}</b>
+          </div>
+          <div>
+            <span>Country</span>
+            <b>
+              <CountryFlag code={visitor.firstEvent.country} size={14} />{" "}
+              {visitor.firstEvent.country || "Unknown"}
+            </b>
+          </div>
+          <div>
+            <span>Device</span>
+            <b>{visitor.firstEvent.device} · {visitor.firstEvent.os}</b>
+          </div>
+          <div>
+            <span>Browser</span>
+            <b>{visitor.firstEvent.browser}</b>
+          </div>
+        </div>
+        <div className="visitorevents">
+          <div className="secttitle">
+            <span>EVENT LOG</span>
+            <small>All recorded events for this visitor</small>
+          </div>
+          {visitor.events.map((e) => (
+            <div className="visitorevent" key={e.id}>
+              <span className="eventbadge" data-type={e.event_type}>
+                {e.event_type === "exit_click" ? (
+                  <>
+                    <Zap size={11} /> Exit tap
+                  </>
+                ) : e.route_id ? (
+                  <>
+                    <Route /> Rule
+                  </>
+                ) : (
+                  <>
+                    <MousePointer2 size={11} /> Redirect
+                  </>
+                )}
+              </span>
+              <span className="eventmeta">
+                <b>{linkName(e.link_id)}</b>
+                <small>{new Date(e.created_at).toLocaleString()}</small>
+              </span>
+              <a
+                className="eventdestination"
+                href={e.destination}
+                target="_blank"
+                rel="noreferrer"
+                title={e.destination}
+              >
+                {e.destination}
+              </a>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
